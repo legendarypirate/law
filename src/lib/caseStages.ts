@@ -24,7 +24,12 @@ export const PARTICIPATION_STAGE_VALUES = PARTICIPATION_STAGE_OPTIONS.map((o) =>
  */
 export function getStagesFrom(startStage: string | null): string[] {
   if (!startStage?.trim()) return [...PARTICIPATION_STAGE_VALUES];
-  const idx = PARTICIPATION_STAGE_VALUES.indexOf(startStage.trim());
+  const normalized = startStage.trim();
+  // `PARTICIPATION_STAGE_VALUES` is a typed tuple of literals, but `startStage` is a plain string.
+  // Cast for indexing; if it doesn't match, we fall back to returning all stages.
+  const idx = PARTICIPATION_STAGE_VALUES.indexOf(
+    normalized as (typeof PARTICIPATION_STAGE_VALUES)[number]
+  );
   if (idx < 0) return [...PARTICIPATION_STAGE_VALUES];
   return PARTICIPATION_STAGE_VALUES.slice(idx);
 }

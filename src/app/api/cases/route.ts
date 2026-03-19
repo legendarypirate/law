@@ -78,12 +78,16 @@ export async function POST(request: Request) {
         contactPhone: contactPhone?.trim() || null,
         subjectType: subjectType?.trim() || null,
         participantCount: participantCount?.trim() || null,
-        caseTsahTypes: Array.isArray(caseTsahTypes) && caseTsahTypes.length > 0 ? caseTsahTypes : null,
+        // Prisma JSON inputs don't accept plain `null` here; omit with `undefined` instead.
+        caseTsahTypes:
+          Array.isArray(caseTsahTypes) && caseTsahTypes.length > 0 ? caseTsahTypes : undefined,
         caseParticipationStage: caseParticipationStage?.trim() || null,
         caseClassificationId: caseClassificationId || null,
-        contractFiles: Array.isArray(contractFiles) && contractFiles.length > 0 ? contractFiles : null,
+        contractFiles:
+          Array.isArray(contractFiles) && contractFiles.length > 0 ? contractFiles : undefined,
         contractFee: contractFee != null && contractFee !== "" ? Number(contractFee) : null,
-        paymentSchedule: Array.isArray(paymentSchedule) && paymentSchedule.length > 0 ? paymentSchedule : null,
+        paymentSchedule:
+          Array.isArray(paymentSchedule) && paymentSchedule.length > 0 ? paymentSchedule : undefined,
         contractTerm: contractTerm?.trim() || null,
       },
       include: {

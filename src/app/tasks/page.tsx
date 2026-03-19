@@ -437,7 +437,10 @@ export default function TasksPage() {
             </div>
             <div>
               <Label>Хариуцагч</Label>
-              <Select value={assignedToId || "none"} onValueChange={(v) => setAssignedToId(v === "none" ? "" : v)}>
+              <Select
+                value={assignedToId || "none"}
+                onValueChange={(v) => setAssignedToId(v == null || v === "none" ? "" : v)}
+              >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="Сонгох" />
                 </SelectTrigger>

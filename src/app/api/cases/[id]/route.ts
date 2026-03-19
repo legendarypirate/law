@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@/generated/prisma/client";
 
 const caseIncludeFull = {
   client: true,
@@ -169,7 +170,9 @@ export async function PUT(
             entityId: c.id,
             action: "CASE_UPDATED",
             message: "Хэрэгийн мэдээлэл шинэчлэгдсэн.",
-            data: changes,
+            // Prisma JSON fields expect Prisma.InputJsonValue (JSON-serializable).
+            // Our diff object is plain data; this cast ensures TypeScript compatibility.
+            data: changes as Prisma.InputJsonValue,
           },
         });
       }

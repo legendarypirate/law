@@ -241,7 +241,7 @@ export default function UsersPage() {
               <Label>Эрх</Label>
               <Select
                 value={roleId}
-                onValueChange={setRoleId}
+                onValueChange={(v) => setRoleId(v ?? "")}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Эрх сонгох" />

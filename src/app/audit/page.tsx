@@ -74,7 +74,8 @@ export default function AuditPage() {
           <Select
             value={entityFilter}
             onValueChange={(v) => {
-              setEntityFilter(v);
+              // `Select` can return `null`; keep our state always as `string`.
+              setEntityFilter(v ?? "all");
               setPage(0);
             }}
           >
