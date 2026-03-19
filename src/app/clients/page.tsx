@@ -1,6 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type Client = {
   id: string;
@@ -16,7 +36,7 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [modal, setModal] = useState<"closed" | "create" | "edit">("closed");
+  const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -28,7 +48,9 @@ export default function ClientsPage() {
   const [error, setError] = useState("");
 
   const fetchClients = async () => {
-    const url = search ? `/api/clients?q=${encodeURIComponent(search)}` : "/api/clients";
+    const url = search
+      ? `/api/clients?q=${encodeURIComponent(search)}`
+      : "/api/clients";
     const res = await fetch(url);
     const data = await res.json();
     if (res.ok) setClients(data);
@@ -50,7 +72,7 @@ export default function ClientsPage() {
     setAddress("");
     setNotes("");
     setError("");
-    setModal("create");
+    setOpen(true);
   };
 
   const openEdit = (c: Client) => {
@@ -62,11 +84,11 @@ export default function ClientsPage() {
     setAddress(c.address || "");
     setNotes(c.notes || "");
     setError("");
-    setModal("edit");
+    setOpen(true);
   };
 
   const closeModal = () => {
-    setModal("closed");
+    setOpen(false);
     setEditing(null);
   };
 
@@ -91,7 +113,7 @@ export default function ClientsPage() {
     const data = await res.json();
     setSubmitting(false);
     if (!res.ok) {
-      setError(data.error || "Request failed");
+      setError(data.error || "Алдаа гарлаа");
       return;
     }
     closeModal();
@@ -99,7 +121,7 @@ export default function ClientsPage() {
   };
 
   const deleteClient = async (id: string) => {
-    if (!confirm("Delete this client? Associated cases may be affected.")) return;
+    if (!confirm("Энэ харилцагчийг устгах уу? Холбоотой хэргүүд нөлөөлөгдөж болно.")) return;
     const res = await fetch(`/api/clients/${id}`, { method: "DELETE" });
     if (res.ok) fetchClients();
   };
@@ -107,146 +129,143 @@ export default function ClientsPage() {
   return (
     <div className="p-8">
       <div className="mb-6 flex items-center justify-between gap-4">
-        <h1 className="font-serif text-2xl font-semibold text-slate-800">Clients</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Харилцагчид
+        </h1>
         <div className="flex items-center gap-2">
-          <input
+          <Input
             type="search"
-            placeholder="Search clients…"
+            placeholder="Харилцагч хайх…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            className="w-64"
           />
-          <button
-            onClick={openCreate}
-            className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
-          >
-            Add client
-          </button>
+          <Button onClick={openCreate}>Харилцагч нэмэх</Button>
         </div>
       </div>
 
       {loading ? (
-        <p className="text-slate-500">Loading…</p>
+        <p className="text-muted-foreground">Ачаалж байна…</p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50">
-              <tr>
-                <th className="p-3 font-medium text-slate-700">Name</th>
-                <th className="p-3 font-medium text-slate-700">Email</th>
-                <th className="p-3 font-medium text-slate-700">Phone</th>
-                <th className="p-3 font-medium text-slate-700">Company</th>
-                <th className="p-3 font-medium text-slate-700 w-24">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Нэр</TableHead>
+                <TableHead>Имэйл</TableHead>
+                <TableHead>Утас</TableHead>
+                <TableHead>Байгууллага</TableHead>
+                <TableHead className="w-24">Үйлдэл</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {clients.map((c) => (
-                <tr key={c.id} className="border-b border-slate-100">
-                  <td className="p-3 font-medium">{c.name}</td>
-                  <td className="p-3 text-slate-600">{c.email || "—"}</td>
-                  <td className="p-3 text-slate-600">{c.phone || "—"}</td>
-                  <td className="p-3 text-slate-600">{c.company || "—"}</td>
-                  <td className="p-3">
-                    <button
+                <TableRow key={c.id}>
+                  <TableCell className="font-medium">{c.name}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {c.email || "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {c.phone || "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {c.company || "—"}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="link"
+                      className="h-auto p-0 text-primary"
                       onClick={() => openEdit(c)}
-                      className="text-amber-600 hover:underline"
                     >
-                      Edit
-                    </button>
-                    {" · "}
-                    <button
+                      Засах
+                    </Button>
+                    <span className="mx-1 text-muted-foreground">·</span>
+                    <Button
+                      variant="link"
+                      className="h-auto p-0 text-destructive hover:text-destructive"
                       onClick={() => deleteClient(c.id)}
-                      className="text-red-600 hover:underline"
                     >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
+                      Устгах
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
 
-      {modal !== "closed" && (
-        <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/50">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
-            <h2 className="font-serif text-lg font-semibold text-slate-800">
-              {editing ? "Edit client" : "New client"}
-            </h2>
-            <form onSubmit={submit} className="mt-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Name *</label>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Email</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Phone</label>
-                <input
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Company</label>
-                <input
-                  value={company}
-                  onChange={(e) => setCompany(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Address</label>
-                <input
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Notes</label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                  rows={2}
-                />
-              </div>
-              {error && <p className="text-sm text-red-600">{error}</p>}
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-                >
-                  {submitting ? "Saving…" : editing ? "Update" : "Create"}
-                </button>
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <Dialog open={open} onOpenChange={(v) => !v && closeModal()}>
+        <DialogContent className="h-full min-h-screen overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editing ? "Харилцагч засах" : "Шинэ харилцагч"}</DialogTitle>
+            <DialogDescription>
+              {editing ? "Харилцагчийн мэдээллийг шинэчлэнэ." : "Шинэ харилцагч нэмнэ."}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="client-name">Нэр *</Label>
+              <Input
+                id="client-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="client-email">Имэйл</Label>
+              <Input
+                id="client-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="client-phone">Утас</Label>
+              <Input
+                id="client-phone"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="client-company">Байгууллага</Label>
+              <Input
+                id="client-company"
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="client-address">Хаяг</Label>
+              <Input
+                id="client-address"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="client-notes">Тэмдэглэл</Label>
+              <Input
+                id="client-notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+              />
+            </div>
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeModal}>
+                Цуцлах
+              </Button>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Хадгалж байна…" : editing ? "Хадгалах" : "Үүсгэх"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

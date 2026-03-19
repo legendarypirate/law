@@ -14,6 +14,7 @@ model Role {
   id          String   @id @default(cuid())
   name        String   @unique
   description String?
+  permissions Json?    // { cases: { create, read, update, delete }, steps: { ... }, clients: { ... }, users: { ... }, roles: { ... }, caseTypes: { ... } }
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   users       User[]
@@ -29,7 +30,10 @@ model User {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
-  casesAssigned Case[]  @relation("CaseAssignee")
+  casesAssigned Case[]      @relation("CaseAssignee")
+  caseStepsCreated CaseStep[]
+  auditLogs       AuditLog[]
+  tasksAssigned   Task[]
 }
 
 model Client {
@@ -46,20 +50,116 @@ model Client {
 }
 
 model Case {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  status      CaseStatus @default(OPEN)
-  clientId    String
-  client      Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  assignedToId String?
-  assignedTo  User?    @relation("CaseAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                   String             @id @default(cuid())
+  title                String
+  description          String?
+  status               CaseStatus        @default(OPEN)
+  clientId             String
+  client               Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  assignedToId         String?
+  assignedTo           User?             @relation("CaseAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  caseTypeCategoryId   String?
+  caseTypeCategory     CaseTypeCategory? @relation(fields: [caseTypeCategoryId], references: [id], onDelete: SetNull)
+  caseKind                 String?   // judicial | non_judicial (шүүхийн | шүүхийн бус)
+  caseJudicialCategory     String?   // when judicial: эрүүгийн | захиргааны | иргэний | зөрчлийн
+  caseCivilProcedureType   String?   // when judicial + иргэний: Ердийн | Хялбаршуулсан | Эвлэрүүлэн зуучлал | Арбитр
+  clientType               String?   // Үйлчлүүлэгийн төрөл: Хүн | хуулийн этгээд
+  contactEmail             String?
+  contactPhone             String?
+  subjectType              String?   // Хохирогч, сэжигтэн, яллагдагч, etc.
+  participantCount         String?   // 1-5 | 6-10 | 11-с дээш
+  caseTsahTypes            Json?     // ТСАХ-ний төрөл (array of strings, multiple selection)
+  caseParticipationStage    String?   // Оролцож эхэлсэн үе шат
+  caseClassificationId     String?
+  caseClassification       CaseClassification? @relation(fields: [caseClassificationId], references: [id], onDelete: SetNull)
+  contractFiles            Json?     // Гэрээ: [{ url, title }]
+  contractFee              Decimal? @db.Decimal(14, 2)  // Гэрээний хөлс
+  paymentSchedule          Json?     // Төлбөрийн хуваарь: [{ date, amount }]
+  contractTerm             String?   // Гэрээний хугацаа e.g. 1 жил 2 сар
+  caseProgressStepIndex    Int?      // 0-based; e.g. 2 = step 3 (Мөрдөн байцаалт); steps 0..index-1 shown completed
+  createdAt                DateTime  @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  steps                CaseStep[]
 
   @@index([clientId])
   @@index([assignedToId])
   @@index([status])
+  @@index([caseTypeCategoryId])
+  @@index([caseClassificationId])
+}
+
+model CaseClassification {
+  id        String   @id @default(cuid())
+  name      String
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  cases     Case[]
+}
+
+model InvestigatorActionType {
+  id        String   @id @default(cuid())
+  name      String   // e.g. Нас тогтоох, Хөрөнгийн үнэлгээ гаргуулах, Мөрдөгчийн магадлагаа
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CaseStep {
+  id           String    @id @default(cuid())
+  caseId       String
+  case         Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  order        Int
+  stageLabel   String    // e.g. Анхан шат шийдсэн, Давж заалдсан, Буцаагдсан, Хаагдсан
+  note         String?
+  deadline     DateTime? // reminder: show remaining days when upcoming
+  createdAt    DateTime  @default(now())
+  createdById  String?
+  createdBy    User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  documents    CaseDocument[]
+  participants CaseStepParticipant[]
+
+  @@index([caseId])
+  @@index([createdById])
+}
+
+model CaseStepParticipant {
+  id         String   @id @default(cuid())
+  caseStepId String
+  caseStep   CaseStep @relation(fields: [caseStepId], references: [id], onDelete: Cascade)
+  role       String   // judge, defendant, prosecutor, attorney, victim, witness, expert
+  name       String
+  createdAt  DateTime @default(now())
+
+  @@index([caseStepId])
+  @@index([caseStepId, role])
+}
+
+model CaseDocument {
+  id         String   @id @default(cuid())
+  caseStepId String
+  caseStep   CaseStep @relation(fields: [caseStepId], references: [id], onDelete: Cascade)
+  title      String
+  url        String?  // external link or DMS link
+  createdAt  DateTime @default(now())
+
+  @@index([caseStepId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  entityType String   // e.g. \"case\", \"client\", \"user\"
+  entityId   String
+  action     String   // e.g. CASE_STATUS_CHANGED, CASE_STEP_ADDED
+  message    String?
+  data       Json?
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([userId])
 }
 
 enum CaseStatus {
@@ -67,4 +167,48 @@ enum CaseStatus {
   IN_PROGRESS
   PENDING
   CLOSED
+}
+
+model CaseType {
+  id          String   @id @default(cuid())
+  name        String   // e.g. Эрүү, Иргэн захиргаа, Байгууллагын эрх зүйн үйлчилгээ
+  description String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  categories  CaseTypeCategory[]
+}
+
+model CaseTypeCategory {
+  id         String   @id @default(cuid())
+  caseTypeId String
+  caseType   CaseType @relation(fields: [caseTypeId], references: [id], onDelete: Cascade)
+  name       String   // e.g. Маргаантай, Маргаангүй
+  createdAt  DateTime @default(now())
+  cases      Case[]
+
+  @@unique([caseTypeId, name])
+  @@index([caseTypeId])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+model Task {
+  id           String     @id @default(cuid())
+  title        String
+  description  String?
+  status       TaskStatus @default(TODO)
+  order        Int        @default(0)
+  assignedToId String?
+  assignedTo   User?      @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+  dueDate      DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([status])
+  @@index([assignedToId])
 }

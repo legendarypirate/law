@@ -14,12 +14,16 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, description } = body;
+    const { name, description, permissions } = body;
     if (!name?.trim()) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
     const role = await prisma.role.create({
-      data: { name: name.trim(), description: description?.trim() || null },
+      data: {
+        name: name.trim(),
+        description: description?.trim() || null,
+        permissions: permissions != null ? permissions : undefined,
+      },
     });
     return NextResponse.json(role);
   } catch (e) {

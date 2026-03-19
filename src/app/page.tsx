@@ -1,40 +1,79 @@
 import Link from "next/link";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Users, Briefcase, Shield, UserCog, FolderTree } from "lucide-react";
 
 export default function Home() {
   return (
     <div className="p-8">
-      <h1 className="mb-2 font-serif text-2xl font-semibold text-slate-800">
-        Dashboard
+      <h1 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">
+        Самбар
       </h1>
-      <p className="mb-8 text-slate-600">
-        Law firm internal system — manage cases, clients, users, and roles.
+      <p className="mb-8 text-muted-foreground">
+        Хууль зүйн фирмийн дотоод систем — хэрэг, харилцагч, хэрэглэгч, эрхийг удирдах.
       </p>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card href="/cases" title="Cases" desc="View and manage matters" />
-        <Card href="/clients" title="Clients" desc="Client directory" />
-        <Card href="/users" title="Users" desc="Staff and permissions" />
-        <Card href="/roles" title="Roles" desc="Role definitions" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <Link href="/cases">
+          <Card className="transition-colors hover:bg-muted/50">
+            <CardHeader className="flex flex-row items-center gap-2">
+              <Briefcase className="size-5 text-primary" />
+              <CardTitle>Хэргүүд</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>Хэргүүдийг харах, удирдах</CardDescription>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/case-types">
+          <Card className="transition-colors hover:bg-muted/50">
+            <CardHeader className="flex flex-row items-center gap-2">
+              <FolderTree className="size-5 text-primary" />
+              <CardTitle>Хэргийн төрөл</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>Хэргийн төрөл, ангилал</CardDescription>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/clients">
+          <Card className="transition-colors hover:bg-muted/50">
+            <CardHeader className="flex flex-row items-center gap-2">
+              <Users className="size-5 text-primary" />
+              <CardTitle>Харилцагчид</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>Харилцагчийн жагсаалт</CardDescription>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/users">
+          <Card className="transition-colors hover:bg-muted/50">
+            <CardHeader className="flex flex-row items-center gap-2">
+              <UserCog className="size-5 text-primary" />
+              <CardTitle>Хэрэглэгчид</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>Ажилтан ба эрх</CardDescription>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/roles">
+          <Card className="transition-colors hover:bg-muted/50">
+            <CardHeader className="flex flex-row items-center gap-2">
+              <Shield className="size-5 text-primary" />
+              <CardTitle>Эрх</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <CardDescription>Роль, эрхийн тохиргоо</CardDescription>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
     </div>
-  );
-}
-
-function Card({
-  href,
-  title,
-  desc,
-}: {
-  href: string;
-  title: string;
-  desc: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-amber-200 hover:shadow"
-    >
-      <h2 className="font-semibold text-slate-800">{title}</h2>
-      <p className="mt-1 text-sm text-slate-500">{desc}</p>
-    </Link>
   );
 }

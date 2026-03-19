@@ -1,21 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Nunito } from "next/font/google";
 import "./globals.css";
 import { AppSidebar } from "@/components/AppSidebar";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const nunito = Nunito({
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-sans",
 });
 
 export const metadata: Metadata = {
-  title: "Law Firm Portal",
-  description: "Internal case, client, and user management",
+  title: "Хууль зүйн портал",
+  description: "Хэрэг, харилцагч, хэрэглэгчийн удирдлага",
 };
 
 export default function RootLayout({
@@ -24,9 +20,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <div className="flex min-h-screen bg-slate-50">
+    <html lang="mn" className={nunito.variable}>
+      <body className="min-h-screen antialiased font-sans">
+        <div className="flex min-h-screen bg-muted/30">
           <AppSidebar />
           <main className="flex-1 overflow-auto">{children}</main>
         </div>

@@ -1,6 +1,33 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type Role = { id: string; name: string };
 type User = {
@@ -15,7 +42,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
-  const [modal, setModal] = useState<"closed" | "create" | "edit">("closed");
+  const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -54,7 +81,7 @@ export default function UsersPage() {
     setRoleId(roles[0]?.id || "");
     setIsActive(true);
     setError("");
-    setModal("create");
+    setOpen(true);
   };
 
   const openEdit = (u: User) => {
@@ -65,11 +92,11 @@ export default function UsersPage() {
     setRoleId(u.role.id);
     setIsActive(u.isActive);
     setError("");
-    setModal("edit");
+    setOpen(true);
   };
 
   const closeModal = () => {
-    setModal("closed");
+    setOpen(false);
     setEditing(null);
   };
 
@@ -94,7 +121,7 @@ export default function UsersPage() {
     const data = await res.json();
     setSubmitting(false);
     if (!res.ok) {
-      setError(data.error || "Request failed");
+      setError(data.error || "Алдаа гарлаа");
       return;
     }
     closeModal();
@@ -102,7 +129,7 @@ export default function UsersPage() {
   };
 
   const deleteUser = async (id: string) => {
-    if (!confirm("Delete this user?")) return;
+    if (!confirm("Энэ хэрэглэгчийг устгах уу?")) return;
     const res = await fetch(`/api/users/${id}`, { method: "DELETE" });
     if (res.ok) fetchUsers();
   };
@@ -110,152 +137,150 @@ export default function UsersPage() {
   return (
     <div className="p-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="font-serif text-2xl font-semibold text-slate-800">Users</h1>
-        <button
-          onClick={openCreate}
-          className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
-        >
-          Add user
-        </button>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          Хэрэглэгчид
+        </h1>
+        <Button onClick={openCreate}>Хэрэглэгч нэмэх</Button>
       </div>
 
       {loading ? (
-        <p className="text-slate-500">Loading…</p>
+        <p className="text-muted-foreground">Ачаалж байна…</p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50">
-              <tr>
-                <th className="p-3 font-medium text-slate-700">Name</th>
-                <th className="p-3 font-medium text-slate-700">Email</th>
-                <th className="p-3 font-medium text-slate-700">Role</th>
-                <th className="p-3 font-medium text-slate-700">Status</th>
-                <th className="p-3 font-medium text-slate-700 w-24">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Нэр</TableHead>
+                <TableHead>Имэйл</TableHead>
+                <TableHead>Эрх</TableHead>
+                <TableHead>Төлөв</TableHead>
+                <TableHead className="w-24">Үйлдэл</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {users.map((u) => (
-                <tr key={u.id} className="border-b border-slate-100">
-                  <td className="p-3">{u.name}</td>
-                  <td className="p-3">{u.email}</td>
-                  <td className="p-3">{u.role.name}</td>
-                  <td className="p-3">
+                <TableRow key={u.id}>
+                  <TableCell className="font-medium">{u.name}</TableCell>
+                  <TableCell className="text-muted-foreground">{u.email}</TableCell>
+                  <TableCell>{u.role.name}</TableCell>
+                  <TableCell>
                     <span
                       className={
-                        u.isActive
-                          ? "text-emerald-600"
-                          : "text-slate-400"
+                        u.isActive ? "text-emerald-600" : "text-muted-foreground"
                       }
                     >
-                      {u.isActive ? "Active" : "Inactive"}
+                      {u.isActive ? "Идэвхтэй" : "Идэвхгүй"}
                     </span>
-                  </td>
-                  <td className="p-3">
-                    <button
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="link"
+                      className="h-auto p-0 text-primary"
                       onClick={() => openEdit(u)}
-                      className="text-amber-600 hover:underline"
                     >
-                      Edit
-                    </button>
-                    {" · "}
-                    <button
+                      Засах
+                    </Button>
+                    <span className="mx-1 text-muted-foreground">·</span>
+                    <Button
+                      variant="link"
+                      className="h-auto p-0 text-destructive hover:text-destructive"
                       onClick={() => deleteUser(u.id)}
-                      className="text-red-600 hover:underline"
                     >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
+                      Устгах
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
 
-      {modal !== "closed" && (
-        <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-            <h2 className="font-serif text-lg font-semibold text-slate-800">
-              {editing ? "Edit user" : "New user"}
-            </h2>
-            <form onSubmit={submit} className="mt-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Email</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                  required
-                  readOnly={!!editing}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Name</label>
-                <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">
-                  Password {editing && "(leave blank to keep)"}
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                  required={!editing}
-                  minLength={6}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700">Role</label>
-                <select
-                  value={roleId}
-                  onChange={(e) => setRoleId(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                >
+      <Dialog open={open} onOpenChange={(v) => !v && closeModal()}>
+        <DialogContent className="h-full min-h-screen overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editing ? "Хэрэглэгч засах" : "Шинэ хэрэглэгч"}</DialogTitle>
+            <DialogDescription>
+              {editing ? "Хэрэглэгчийн мэдээллийг шинэчлэнэ." : "Шинэ хэрэглэгч үүсгэнэ."}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="user-email">Имэйл</Label>
+              <Input
+                id="user-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                readOnly={!!editing}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="user-name">Нэр</Label>
+              <Input
+                id="user-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="user-password">
+                Нууц үг {editing && "(өөрчлөхгүй бол хоосон үлдээнэ)"}
+              </Label>
+              <Input
+                id="user-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required={!editing}
+                minLength={6}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Эрх</Label>
+              <Select
+                value={roleId}
+                onValueChange={setRoleId}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Эрх сонгох" />
+                </SelectTrigger>
+                <SelectContent>
                   {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
+                    <SelectItem key={r.id} value={r.id}>
                       {r.name}
-                    </option>
+                    </SelectItem>
                   ))}
-                </select>
+                </SelectContent>
+              </Select>
+            </div>
+            {editing && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="user-active"
+                  checked={isActive}
+                  onChange={(e) => setIsActive(e.target.checked)}
+                  className="size-4 rounded border-input"
+                />
+                <Label htmlFor="user-active" className="font-normal">
+                  Идэвхтэй
+                </Label>
               </div>
-              {editing && (
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={isActive}
-                    onChange={(e) => setIsActive(e.target.checked)}
-                  />
-                  <span className="text-sm text-slate-700">Active</span>
-                </label>
-              )}
-              {error && <p className="text-sm text-red-600">{error}</p>}
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-                >
-                  {submitting ? "Saving…" : editing ? "Update" : "Create"}
-                </button>
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            )}
+            {error && <p className="text-sm text-destructive">{error}</p>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeModal}>
+                Цуцлах
+              </Button>
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Хадгалж байна…" : editing ? "Хадгалах" : "Үүсгэх"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

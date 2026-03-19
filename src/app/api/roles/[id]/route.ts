@@ -26,12 +26,13 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, description } = body;
+    const { name, description, permissions } = body;
     const role = await prisma.role.update({
       where: { id },
       data: {
         ...(name !== undefined && { name: name?.trim() || undefined }),
         ...(description !== undefined && { description: description?.trim() || null }),
+        ...(permissions !== undefined && { permissions }),
       },
     });
     return NextResponse.json(role);
