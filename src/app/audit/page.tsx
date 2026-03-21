@@ -35,6 +35,7 @@ const ACTION_LABELS: Record<string, string> = {
   CASE_CREATED: "Хэрэг нээсэн",
   CASE_UPDATED: "Хэрэг шинэчилсэн",
   CASE_STEP_ADDED: "Алхам нэмсэн",
+  CASE_STEP_SELECTION_SAVED: "Алхмын сонголт / тэмдэглэл хадгалсан",
 };
 
 export default function AuditPage() {

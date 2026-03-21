@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
+import { attachmentsFromContractFilesInput } from "@/lib/auditAttachments";
 
 const caseIncludeFull = {
   client: true,
@@ -163,16 +164,35 @@ export async function PUT(
         };
       }
 
-      if (Object.keys(changes).length > 0) {
+      let contractFilesChanged = false;
+      if (contractFiles !== undefined) {
+        const prevJson = JSON.stringify(previous.contractFiles ?? null);
+        const nextVal =
+          Array.isArray(contractFiles) && contractFiles.length > 0 ? contractFiles : null;
+        const nextJson = JSON.stringify(nextVal);
+        contractFilesChanged = prevJson !== nextJson;
+        if (contractFilesChanged) {
+          changes.contractFiles = true;
+        }
+      }
+
+      const attachments = contractFilesChanged
+        ? attachmentsFromContractFilesInput(contractFiles)
+        : [];
+
+      const auditData: Record<string, unknown> = { ...changes };
+      if (attachments.length > 0) {
+        auditData.attachments = attachments;
+      }
+
+      if (Object.keys(auditData).length > 0) {
         await prisma.auditLog.create({
           data: {
             entityType: "case",
             entityId: c.id,
             action: "CASE_UPDATED",
             message: "Хэрэгийн мэдээлэл шинэчлэгдсэн.",
-            // Prisma JSON fields expect Prisma.InputJsonValue (JSON-serializable).
-            // Our diff object is plain data; this cast ensures TypeScript compatibility.
-            data: changes as Prisma.InputJsonValue,
+            data: auditData as Prisma.InputJsonValue,
           },
         });
       }

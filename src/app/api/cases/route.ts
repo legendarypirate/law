@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getStagesFrom } from "@/lib/caseStages";
+import { attachmentsFromContractFilesInput } from "@/lib/auditAttachments";
 
 export async function GET(request: Request) {
   try {
@@ -97,6 +98,7 @@ export async function POST(request: Request) {
       },
     });
 
+    const createdAttachments = attachmentsFromContractFilesInput(contractFiles);
     // Audit log for case creation
     await prisma.auditLog.create({
       data: {
@@ -108,6 +110,7 @@ export async function POST(request: Request) {
           title: c.title,
           clientId: c.clientId,
           status: c.status,
+          ...(createdAttachments.length > 0 ? { attachments: createdAttachments } : {}),
         },
       },
     });

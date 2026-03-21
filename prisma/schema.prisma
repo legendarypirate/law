@@ -128,7 +128,7 @@ model CaseStepParticipant {
   id         String   @id @default(cuid())
   caseStepId String
   caseStep   CaseStep @relation(fields: [caseStepId], references: [id], onDelete: Cascade)
-  role       String   // judge, defendant, prosecutor, attorney, victim, witness, expert
+  role       String   // see src/lib/stepParticipantRoles.ts STEP_PARTICIPANT_ROLE_KEYS
   name       String
   createdAt  DateTime @default(now())
 

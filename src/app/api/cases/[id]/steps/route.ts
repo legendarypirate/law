@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { STEP_PARTICIPANT_ROLE_KEYS } from "@/lib/stepParticipantRoles";
+import {
+  attachmentsFromDocuments,
+  extractFilesFromCaseNoteJson,
+  mergeAttachmentsDedupe,
+} from "@/lib/auditAttachments";
 
 // List steps for a case (in chronological order)
 export async function GET(
@@ -44,15 +50,7 @@ export async function POST(
       note?: string;
       deadline?: string | null;
       documents?: { title: string; url?: string }[];
-      participants?: {
-        judge?: string[];
-        defendant?: string[];
-        prosecutor?: string[];
-        attorney?: string[];
-        victim?: string[];
-        witness?: string[];
-        expert?: string[];
-      };
+      participants?: Partial<Record<(typeof STEP_PARTICIPANT_ROLE_KEYS)[number], string[]>>;
       userId?: string;
     } = body;
 
@@ -65,10 +63,9 @@ export async function POST(
 
     const existingCount = await prisma.caseStep.count({ where: { caseId: id } });
 
-    const roleKeys = ["judge", "defendant", "prosecutor", "attorney", "victim", "witness", "expert"] as const;
     const participantRows: { role: string; name: string }[] = [];
     if (participants && typeof participants === "object") {
-      for (const key of roleKeys) {
+      for (const key of STEP_PARTICIPANT_ROLE_KEYS) {
         const arr = participants[key];
         if (Array.isArray(arr)) {
           for (const name of arr) {
@@ -108,6 +105,11 @@ export async function POST(
       },
     });
 
+    const stepAttachments = mergeAttachmentsDedupe(
+      attachmentsFromDocuments(step.documents),
+      extractFilesFromCaseNoteJson(note?.trim() || null)
+    );
+
     // Audit
     await prisma.auditLog.create({
       data: {
@@ -118,6 +120,7 @@ export async function POST(
         data: {
           stepId: step.id,
           stageLabel: step.stageLabel,
+          ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
         },
         userId,
       },
