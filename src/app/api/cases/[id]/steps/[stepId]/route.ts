@@ -12,6 +12,7 @@ import {
   SHUUKH_HARMGVIUL_NOTE_KIND,
   URIDCHILSAN_HELELTSUULEG_NOTE_KIND,
 } from "@/lib/caseNoteDisplay";
+import { DAVJ_SHUUKH_HURALDAAN_NOTE_KIND } from "@/lib/davjShuukhHuraldaanNote";
 
 export async function PATCH(
   request: Request,
@@ -132,13 +133,19 @@ export async function PATCH(
         try {
           const parsed = JSON.parse(nextNoteTrim) as { kind?: string };
           const k = parsed.kind;
-          if (k === URIDCHILSAN_HELELTSUULEG_NOTE_KIND || k === SHUUKH_HARMGVIUL_NOTE_KIND) {
+          if (
+            k === URIDCHILSAN_HELELTSUULEG_NOTE_KIND ||
+            k === SHUUKH_HARMGVIUL_NOTE_KIND ||
+            k === DAVJ_SHUUKH_HURALDAAN_NOTE_KIND
+          ) {
             let selectionMessage = formatCaseStepNoteForDisplay(nextNoteTrim);
             if (!selectionMessage.trim()) {
               selectionMessage =
                 k === URIDCHILSAN_HELELTSUULEG_NOTE_KIND
                   ? `${existing.stageLabel}: тэмдэглэл шинэчлэгдсөн.`
-                  : `${existing.stageLabel}: мэдээлэл шинэчлэгдсөн.`;
+                  : k === DAVJ_SHUUKH_HURALDAAN_NOTE_KIND
+                    ? `${existing.stageLabel}: тэмдэглэл шинэчлэгдсөн.`
+                    : `${existing.stageLabel}: мэдээлэл шинэчлэгдсөн.`;
             }
             await prisma.auditLog.create({
               data: {

@@ -1,3 +1,18 @@
+import {
+  ANKHAN_SHUUKH_SHIIDVER_NOTE_KIND,
+  ankhanShiidverExcludesGomdolSection,
+} from "@/lib/ankhanShuukhShiidverNote";
+import {
+  DAVJ_KHRALIIN_SHIIDVER_HURAL_HOYSHLUULAH,
+  DAVJ_SHUUKH_HURALDAAN_NOTE_KIND,
+  davjKhuraliinShiidverShowsGomdolSection,
+} from "@/lib/davjShuukhHuraldaanNote";
+import {
+  formatHynaltKhuraliinShiidverForDisplay,
+  HYNALT_SHUUGIIN_NER_STATIC,
+  HYNALT_SHUUKH_HURALDAAN_NOTE_KIND,
+  hynaltKhuraliinShiidverShowsGomdolSection,
+} from "@/lib/hynaltShuukhHuraldaanNote";
 import { STEP_PARTICIPANT_ROLES } from "@/lib/stepParticipantRoles";
 
 /** Step note JSON `kind` for «Прокурорын хяналт» (алхам 4). */
@@ -60,7 +75,9 @@ export function formatCaseStepNoteForDisplay(note: string | null): string {
     }
 
     if (o.kind === URIDCHILSAN_HELELTSUULEG_NOTE_KIND) {
-      const sh = typeof o.shiidver === "string" ? o.shiidver.trim() : "";
+      const shRaw = typeof o.shiidver === "string" ? o.shiidver.trim() : "";
+      const prokurorBuutsaaLogged = o.uridProkurorBuutsaaLogged === true;
+      const sh = shRaw || (prokurorBuutsaaLogged ? "Хэргийг прокурорт буцаах" : "");
       const t = typeof o.temdeglel === "string" ? o.temdeglel.trim() : "";
       const ho = typeof o.hoyshluulahOgnoo === "string" ? o.hoyshluulahOgnoo.trim() : "";
       const kt = typeof o.kuuchinTogoldorBolohOgnoo === "string" ? o.kuuchinTogoldorBolohOgnoo.trim() : "";
@@ -94,6 +111,202 @@ export function formatCaseStepNoteForDisplay(note: string | null): string {
         }
       }
       if (t) parts.push(`Тэмдэглэл: ${t}`);
+      if (parts.length > 0) return parts.join("\n\n");
+    }
+
+    if (o.kind === ANKHAN_SHUUKH_SHIIDVER_NOTE_KIND) {
+      const z = (k: string) => (typeof o[k] === "string" ? (o[k] as string).trim() : "");
+      const shi = z("shiidver");
+      if (shi) parts.push(`Шүүхээс гарсан шийдвэр: ${shi}`);
+      if (!ankhanShiidverExcludesGomdolSection(shi)) {
+        const gomdolE = z("gomdolGargsanEseh");
+        if (gomdolE) parts.push(`Гомдол гаргасан эсэх: ${gomdolE}`);
+        if (gomdolE === "Тийм") {
+          const entries = o.gomdolGargsanTaluudEntries;
+          if (Array.isArray(entries) && entries.length > 0) {
+            for (const item of entries) {
+              if (!item || typeof item !== "object") continue;
+              const x = item as Record<string, unknown>;
+              const tal = typeof x.tal === "string" ? x.tal.trim() : "";
+              if (!tal) continue;
+              const note = typeof x.temdeglel === "string" ? x.temdeglel.trim() : "";
+              const files = x.files;
+              const fileTitles =
+                Array.isArray(files) && files.length > 0
+                  ? files
+                      .filter((f): f is { title?: unknown } => f != null && typeof f === "object")
+                      .map((f) =>
+                        typeof f.title === "string" && f.title.trim() ? f.title.trim() : "Файл"
+                      )
+                  : [];
+              const bits = [tal];
+              if (note) bits.push(`Тэмдэглэл: ${note}`);
+              if (fileTitles.length) bits.push(`Файл: ${fileTitles.join(", ")}`);
+              parts.push(`Гомдол гаргасан тал: ${bits.join(" · ")}`);
+            }
+          } else if (Array.isArray(o.gomdolGargsanTaluud) && o.gomdolGargsanTaluud.length > 0) {
+            const tals = o.gomdolGargsanTaluud
+              .filter((x): x is string => typeof x === "string" && x.trim() !== "")
+              .map((s) => s.trim());
+            if (tals.length) parts.push(`Гомдол гаргасан талууд: ${tals.join(", ")}`);
+          }
+        }
+      }
+      if (shi === "Шүүх хуралдааныг хойшлуулах") {
+        if (z("daraagiinKhuralOgnoo")) parts.push(`Дараагийн хурлын тов: ${z("daraagiinKhuralOgnoo")}`);
+        if (z("daraagiinKhuralTemdeglel")) parts.push(`Тэмдэглэл: ${z("daraagiinKhuralTemdeglel")}`);
+      } else if (shi === "Хэрэг хэлэлцэхийг 60 хүртэлх хоногоор хойшлуулах") {
+        if (z("hoyshluulah60Ognoo")) parts.push(`Огноо: ${z("hoyshluulah60Ognoo")}`);
+        if (z("hoyshluulah60Temdeglel")) parts.push(`Тэмдэглэл: ${z("hoyshluulah60Temdeglel")}`);
+      } else if (shi === "Ажлын 5 хүртэлх хоногоор завсарлуулах") {
+        if (z("avasarluulahOgnoo")) parts.push(`Огноо: ${z("avasarluulahOgnoo")}`);
+        if (z("avasarluulahTemdeglel")) parts.push(`Тэмдэглэл: ${z("avasarluulahTemdeglel")}`);
+      } else if (shi === "Шийтгэх тогтоол") {
+        if (z("shiitgehTemdeglel")) parts.push(`Тэмдэглэл: ${z("shiitgehTemdeglel")}`);
+        const zuillelLabel =
+          z("kheregiinZuillelName") ||
+          (typeof o.kheregiinZuillel === "string" ? o.kheregiinZuillel.trim() : "");
+        if (zuillelLabel) parts.push(`Хэргийн зүйлчлэл: ${zuillelLabel}`);
+        if (z("yalynTorol")) parts.push(`Ялын төрөл: ${z("yalynTorol")}`);
+        if (z("hugatsaa")) parts.push(`Хугацаа: ${z("hugatsaa")}`);
+        if (z("juram")) parts.push(`Журам: ${z("juram")}`);
+        if (z("garguulsanHohirol")) parts.push(`Гаргуулсан хохирол: ${z("garguulsanHohirol")}`);
+      } else if (shi === "Цагаатгах тогтоол") {
+        if (z("tsagaatgahTemdeglel")) parts.push(`Тэмдэглэл: ${z("tsagaatgahTemdeglel")}`);
+      }
+      if (parts.length > 0) return parts.join("\n\n");
+    }
+
+    if (o.kind === DAVJ_SHUUKH_HURALDAAN_NOTE_KIND) {
+      const z = (k: string) => (typeof o[k] === "string" ? (o[k] as string).trim() : "");
+      if (z("kheregHuleenAwsanOgnoo")) parts.push(`Хэрэг хүлээн авсан огноо: ${z("kheregHuleenAwsanOgnoo")}`);
+      if (z("shuugiinNer")) parts.push(`Шүүхийн нэр: ${z("shuugiinNer")}`);
+      if (z("shuugch")) parts.push(`Шүүгч: ${z("shuugch")}`);
+      if (z("shuugchiinTuslah")) parts.push(`Шүүгчийн туслах: ${z("shuugchiinTuslah")}`);
+      if (z("khuralynTov")) parts.push(`Хурлын тов: ${z("khuralynTov")}`);
+      const khs = z("khuraliinShiidver");
+      if (khs) parts.push(`Хурлын шийдвэр: ${khs}`);
+      if (khs === DAVJ_KHRALIIN_SHIIDVER_HURAL_HOYSHLUULAH && z("khuralHoyshluulahKhuralOgnoo")) {
+        parts.push(`Дараагийн хурлын тов: ${z("khuralHoyshluulahKhuralOgnoo")}`);
+      }
+      if (davjKhuraliinShiidverShowsGomdolSection(khs)) {
+        const gomdolE = z("davjGomdolGargsanEseh");
+        if (gomdolE) parts.push(`Гомдол гаргасан эсэх: ${gomdolE}`);
+        if (gomdolE === "Тийм") {
+          const entries = o.davjGomdolGargsanTaluudEntries;
+          if (Array.isArray(entries) && entries.length > 0) {
+            for (const item of entries) {
+              if (!item || typeof item !== "object") continue;
+              const x = item as Record<string, unknown>;
+              const tal = typeof x.tal === "string" ? x.tal.trim() : "";
+              if (!tal) continue;
+              const note = typeof x.temdeglel === "string" ? x.temdeglel.trim() : "";
+              const files = x.files;
+              const fileTitles =
+                Array.isArray(files) && files.length > 0
+                  ? files
+                      .filter((f): f is { title?: unknown } => f != null && typeof f === "object")
+                      .map((f) =>
+                        typeof f.title === "string" && f.title.trim() ? f.title.trim() : "Файл"
+                      )
+                  : [];
+              const bits = [tal];
+              if (note) bits.push(`Тэмдэглэл: ${note}`);
+              if (fileTitles.length) bits.push(`Файл: ${fileTitles.join(", ")}`);
+              parts.push(`Гомдол гаргасан тал: ${bits.join(" · ")}`);
+            }
+          } else if (Array.isArray(o.davjGomdolGargsanTaluud) && o.davjGomdolGargsanTaluud.length > 0) {
+            const tals = o.davjGomdolGargsanTaluud
+              .filter((x): x is string => typeof x === "string" && x.trim() !== "")
+              .map((s) => s.trim());
+            if (tals.length) parts.push(`Гомдол гаргасан талууд: ${tals.join(", ")}`);
+          }
+        }
+      }
+      if (o.davjKheregTudgelzsen === true) {
+        parts.push("Хэрэг түдгэлзүүлсэн");
+      }
+      if (z("khuraliinShiidverTemdeglel")) parts.push(`Тэмдэглэл: ${z("khuraliinShiidverTemdeglel")}`);
+      const khf = o.khuraliinShiidverFiles;
+      if (Array.isArray(khf) && khf.length > 0) {
+        const titles = khf
+          .filter((f): f is { title?: unknown } => f != null && typeof f === "object")
+          .map((f) => (typeof f.title === "string" && f.title.trim() ? f.title.trim() : "Файл"));
+        if (titles.length) parts.push(`Файл: ${titles.join(", ")}`);
+      }
+      const sh = o.shuugch;
+      if (Array.isArray(sh) && !z("shuugch")) {
+        const names = sh
+          .filter((x): x is string => typeof x === "string" && x.trim() !== "")
+          .map((s) => s.trim());
+        if (names.length) parts.push(`Шүүгч: ${names.join(", ")}`);
+      }
+      const tus = o.shuugchiinTuslah;
+      if (Array.isArray(tus) && !z("shuugchiinTuslah")) {
+        const names = tus
+          .filter((x): x is string => typeof x === "string" && x.trim() !== "")
+          .map((s) => s.trim());
+        if (names.length) parts.push(`Шүүгчийн туслах: ${names.join(", ")}`);
+      }
+      if (parts.length > 0) return parts.join("\n\n");
+    }
+
+    if (o.kind === HYNALT_SHUUKH_HURALDAAN_NOTE_KIND) {
+      const z = (k: string) => (typeof o[k] === "string" ? (o[k] as string).trim() : "");
+      if (z("kheregHuleenAwsanOgnoo")) parts.push(`Хэрэг хүлээн авсан огноо: ${z("kheregHuleenAwsanOgnoo")}`);
+      parts.push(`Шүүхийн нэр: ${HYNALT_SHUUGIIN_NER_STATIC}`);
+      const zNiit = z("niitShuugchidinKhuraldaanaasGarssanTogtool");
+      if (zNiit) {
+        parts.push(`Нийт шүүгчдийн хуралдаанаас гарсан тогтоол: ${zNiit}`);
+      }
+      if (z("khuralynTov")) parts.push(`Хурлын тов: ${z("khuralynTov")}`);
+      const khs = z("khuraliinShiidver");
+      if (khs) parts.push(`Хурлын шийдвэр: ${formatHynaltKhuraliinShiidverForDisplay(khs)}`);
+      if (khs === DAVJ_KHRALIIN_SHIIDVER_HURAL_HOYSHLUULAH && z("khuralHoyshluulahKhuralOgnoo")) {
+        parts.push(`Дараагийн хурлын тов: ${z("khuralHoyshluulahKhuralOgnoo")}`);
+      }
+      if (hynaltKhuraliinShiidverShowsGomdolSection(khs)) {
+        const gomdolE = z("davjGomdolGargsanEseh");
+        if (gomdolE) parts.push(`Гомдол гаргасан эсэх: ${gomdolE}`);
+        if (gomdolE === "Тийм") {
+          const entries = o.davjGomdolGargsanTaluudEntries;
+          if (Array.isArray(entries) && entries.length > 0) {
+            for (const item of entries) {
+              if (!item || typeof item !== "object") continue;
+              const x = item as Record<string, unknown>;
+              const tal = typeof x.tal === "string" ? x.tal.trim() : "";
+              if (!tal) continue;
+              const note = typeof x.temdeglel === "string" ? x.temdeglel.trim() : "";
+              const files = x.files;
+              const fileTitles =
+                Array.isArray(files) && files.length > 0
+                  ? files
+                      .filter((f): f is { title?: unknown } => f != null && typeof f === "object")
+                      .map((f) =>
+                        typeof f.title === "string" && f.title.trim() ? f.title.trim() : "Файл"
+                      )
+                  : [];
+              const bits = [tal];
+              if (note) bits.push(`Тэмдэглэл: ${note}`);
+              if (fileTitles.length) bits.push(`Файл: ${fileTitles.join(", ")}`);
+              parts.push(`Гомдол гаргасан тал: ${bits.join(" · ")}`);
+            }
+          } else if (Array.isArray(o.davjGomdolGargsanTaluud) && o.davjGomdolGargsanTaluud.length > 0) {
+            const tals = o.davjGomdolGargsanTaluud
+              .filter((x): x is string => typeof x === "string" && x.trim() !== "")
+              .map((s) => s.trim());
+            if (tals.length) parts.push(`Гомдол гаргасан талууд: ${tals.join(", ")}`);
+          }
+        }
+      }
+      if (z("khuraliinShiidverTemdeglel")) parts.push(`Тэмдэглэл: ${z("khuraliinShiidverTemdeglel")}`);
+      const khf = o.khuraliinShiidverFiles;
+      if (Array.isArray(khf) && khf.length > 0) {
+        const titles = khf
+          .filter((f): f is { title?: unknown } => f != null && typeof f === "object")
+          .map((f) => (typeof f.title === "string" && f.title.trim() ? f.title.trim() : "Файл"));
+        if (titles.length) parts.push(`Файл: ${titles.join(", ")}`);
+      }
       if (parts.length > 0) return parts.join("\n\n");
     }
 

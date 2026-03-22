@@ -11,9 +11,10 @@ export const STEP_PARTICIPANT_ROLE_KEYS = [
   "defendantAttorney",
   "victim",
   "attorney",
-  "expert",
   "civilClaimantRespondent",
   "civilClaimantRespondentAttorney",
+  "citizenRepresentative",
+  "expert",
 ] as const;
 
 export type StepParticipantRoleKey = (typeof STEP_PARTICIPANT_ROLE_KEYS)[number];
@@ -31,23 +32,24 @@ export function normalizeStepParticipantRole(role: string): string {
 export const STEP_PARTICIPANT_ROLES: { key: StepParticipantRoleKey; label: string }[] = [
   { key: "judge", label: "Шүүгч" },
   { key: "judgeAssistant", label: "Шүүгчийн туслах" },
-  { key: "prosecutor", label: "Прокурор" },
+  { key: "prosecutor", label: "Улсын яллагч" },
   { key: "witness", label: "Бусад оролцогч" },
-  { key: "defendant", label: "Яллагдагч" },
-  { key: "defendantAttorney", label: "Яллагдагчийн өмгөөлөгч" },
+  { key: "defendant", label: "Шүүгдэгч" },
+  { key: "defendantAttorney", label: "Шүүгдэгчийн өмгөөлөгч" },
   { key: "victim", label: "Хохирогч" },
   { key: "attorney", label: "Хохирогчийн өмгөөлөгч" },
-  { key: "expert", label: "Шинжээч" },
   { key: "civilClaimantRespondent", label: "Иргэний нэхэмжлэгч, хариуцагч" },
   {
     key: "civilClaimantRespondentAttorney",
     label: "Иргэний нэхэмжлэгч, хариуцагчийн өмгөөлөгч",
   },
+  { key: "citizenRepresentative", label: "Иргэдийн төлөөлөгч" },
+  { key: "expert", label: "Шинжээч" },
 ];
 
 /**
  * Оролцогчдын харуулалт: багана 2 (`sm:grid-cols-2`), мөр бүр 2 талбар.
- * Доод: Шинжээч | Иргэний нэхэмжлэгч, хариуцагч, түүний дараа өмгөөлөгч (сүүлийн нэг багана `col-span-2`).
+ * Сүүлд: Иргэдийн төлөөлөгч, түүний дараа Шинжээч (алхам 7 гэх мэт).
  */
 export const PARTICIPANT_GRID_ORDER_KEYS: readonly StepParticipantRoleKey[] = [
   "judge",
@@ -58,7 +60,8 @@ export const PARTICIPANT_GRID_ORDER_KEYS: readonly StepParticipantRoleKey[] = [
   "defendantAttorney",
   "victim",
   "attorney",
-  "expert",
   "civilClaimantRespondent",
   "civilClaimantRespondentAttorney",
+  "citizenRepresentative",
+  "expert",
 ];
