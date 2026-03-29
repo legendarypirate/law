@@ -73,7 +73,32 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { title, description, status, clientId, assignedToId, caseTypeCategoryId, caseKind, caseJudicialCategory, caseCivilProcedureType, clientType, contactEmail, contactPhone, subjectType, participantCount, caseTsahTypes, caseParticipationStage, caseClassificationId, contractFiles, contractFee, paymentSchedule, contractTerm, caseProgressStepIndex } = body;
+    const {
+      title,
+      description,
+      status,
+      clientId,
+      assignedToId,
+      caseTypeCategoryId,
+      caseKind,
+      caseJudicialCategory,
+      caseCivilProcedureType,
+      clientType,
+      contactEmail,
+      contactPhone,
+      subjectType,
+      participantCount,
+      caseTsahTypes,
+      caseParticipationStage,
+      mordonBaitsaaltynKharyaalal,
+      prokurorynKharyaalal,
+      caseClassificationId,
+      contractFiles,
+      contractFee,
+      paymentSchedule,
+      contractTerm,
+      caseProgressStepIndex,
+    } = body;
     const data: Record<string, unknown> = {};
     const validStatuses = ["OPEN", "IN_PROGRESS", "PENDING", "CLOSED"] as const;
     if (title !== undefined) data.title = title?.trim();
@@ -116,6 +141,14 @@ export async function PUT(
     if (participantCount !== undefined) (data as { participantCount?: string | null }).participantCount = participantCount?.trim() || null;
     if (caseTsahTypes !== undefined) (data as { caseTsahTypes?: string[] | null }).caseTsahTypes = Array.isArray(caseTsahTypes) && caseTsahTypes.length > 0 ? caseTsahTypes : null;
     if (caseParticipationStage !== undefined) (data as { caseParticipationStage?: string | null }).caseParticipationStage = caseParticipationStage?.trim() || null;
+    if (mordonBaitsaaltynKharyaalal !== undefined) {
+      (data as { mordonBaitsaaltynKharyaalal?: string | null }).mordonBaitsaaltynKharyaalal =
+        mordonBaitsaaltynKharyaalal?.trim() || null;
+    }
+    if (prokurorynKharyaalal !== undefined) {
+      (data as { prokurorynKharyaalal?: string | null }).prokurorynKharyaalal =
+        prokurorynKharyaalal?.trim() || null;
+    }
     if (caseClassificationId !== undefined) (data as { caseClassificationId?: string | null }).caseClassificationId = caseClassificationId || null;
     if (contractFiles !== undefined) (data as { contractFiles?: unknown }).contractFiles = Array.isArray(contractFiles) && contractFiles.length > 0 ? contractFiles : null;
     if (contractFee !== undefined) (data as { contractFee?: number | null }).contractFee = contractFee != null && contractFee !== "" ? Number(contractFee) : null;
@@ -205,16 +238,9 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    await prisma.case.delete({ where: { id } });
-    return NextResponse.json({ success: true });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ error: "Failed to delete case" }, { status: 500 });
-  }
+export async function DELETE() {
+  return NextResponse.json(
+    { error: "Хэрэг устгахдаа PIN шаардлагатай. Жагсаалтаас «Устгах» товчийг ашиглана уу." },
+    { status: 403 }
+  );
 }

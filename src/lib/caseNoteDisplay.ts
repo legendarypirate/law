@@ -376,6 +376,35 @@ export function formatCaseStepNoteForDisplay(note: string | null): string {
   return note.trim();
 }
 
+/** Үйл явцын түүхийн мессеж: «Өмгөөлөгчөөс гаргасан хүсэлт гомдлууд» хэсэг */
+export function formatOmgoologchHuseltGomdolForAudit(om: unknown): string {
+  if (!Array.isArray(om) || om.length === 0) {
+    return "Өмгөөлөгчөөс гаргасан хүсэлт гомдлууд — (хоосон болгосон)";
+  }
+  const entryLines: string[] = [];
+  for (const e of om) {
+    if (!e || typeof e !== "object") continue;
+    const t = typeof (e as { type?: unknown }).type === "string" ? (e as { type: string }).type.trim() : "";
+    const n = typeof (e as { note?: unknown }).note === "string" ? (e as { note: string }).note.trim() : "";
+    const files = (e as { files?: unknown }).files;
+    const fileTitles =
+      Array.isArray(files) && files.length > 0
+        ? files
+            .filter((f): f is { title?: unknown } => f != null && typeof f === "object")
+            .map((f) => (typeof f.title === "string" && f.title.trim() ? f.title.trim() : "Файл"))
+        : [];
+    const bits: string[] = [];
+    if (t) bits.push(`Төрөл: ${t}`);
+    if (n) bits.push(`Тэмдэглэл: ${n}`);
+    if (fileTitles.length) bits.push(`Файл: ${fileTitles.join(", ")}`);
+    if (bits.length) entryLines.push(bits.join(" · "));
+  }
+  if (entryLines.length === 0) {
+    return "Өмгөөлөгчөөс гаргасан хүсэлт гомдлууд — (хоосон болгосон)";
+  }
+  return `Өмгөөлөгчөөс гаргасан хүсэлт гомдлууд — ${entryLines.join(" | ")}`;
+}
+
 export function parseAuditStepId(data: unknown): string | null {
   if (!data || typeof data !== "object") return null;
   const id = (data as { stepId?: unknown }).stepId;

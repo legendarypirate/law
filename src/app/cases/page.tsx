@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { emptyPinCells, PinCodeInput, pinCellsToString } from "@/components/PinCodeInput";
 import {
   Select,
   SelectContent,
@@ -32,6 +34,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PARTICIPATION_STAGE_OPTIONS } from "@/lib/caseStages";
+
+/** Сэргээхэд сонгох үе шат (индекс 0–8), «Хэрэг хаагдсан» биш */
+const REOPEN_STAGE_OPTIONS = PARTICIPATION_STAGE_OPTIONS.slice(0, 9);
+import { sortCaseClassifications } from "@/lib/caseClassifications";
 import { cn, formatNumberWithCommas, parseFormattedNumber, sanitizeNumericInput } from "@/lib/utils";
 
 type Client = { id: string; name: string; email: string | null };
@@ -51,6 +57,8 @@ type CaseItem = {
   participantCount: string | null;
   caseTsahTypes: string[] | null;
   caseParticipationStage: string | null;
+  mordonBaitsaaltynKharyaalal: string | null;
+  prokurorynKharyaalal: string | null;
   caseClassificationId: string | null;
   caseClassification: { id: string; name: string } | null;
   contractFiles: { url: string; title: string }[] | null;
@@ -153,6 +161,13 @@ export default function CasesPage() {
   const [caseJudicialCategory, setCaseJudicialCategory] = useState<string>("");
   const [caseCivilProcedureType, setCaseCivilProcedureType] = useState<string>("");
   const [clientId, setClientId] = useState("");
+  const [registerNewClient, setRegisterNewClient] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  const [newClientEmail, setNewClientEmail] = useState("");
+  const [newClientPhone, setNewClientPhone] = useState("");
+  const [newClientCompany, setNewClientCompany] = useState("");
+  const [newClientAddress, setNewClientAddress] = useState("");
+  const [newClientNotes, setNewClientNotes] = useState("");
   const [assignedToId, setAssignedToId] = useState("");
   const [clientType, setClientType] = useState("");
   const [contactEmail, setContactEmail] = useState("");
@@ -161,6 +176,8 @@ export default function CasesPage() {
   const [participantCount, setParticipantCount] = useState("");
   const [caseTsahTypes, setCaseTsahTypes] = useState<string[]>([]);
   const [caseParticipationStage, setCaseParticipationStage] = useState("");
+  const [mordonBaitsaaltynKharyaalal, setMordonBaitsaaltynKharyaalal] = useState("");
+  const [prokurorynKharyaalal, setProkurorynKharyaalal] = useState("");
   const [caseClassificationId, setCaseClassificationId] = useState("");
   const [classifications, setClassifications] = useState<{ id: string; name: string; order: number }[]>([]);
   const [classificationOpen, setClassificationOpen] = useState(false);
@@ -174,6 +191,20 @@ export default function CasesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [wizardStep, setWizardStep] = useState(1);
+  const [closeTarget, setCloseTarget] = useState<CaseItem | null>(null);
+  const [closePinCells, setClosePinCells] = useState<string[]>(() => emptyPinCells(4));
+  const [closeComment, setCloseComment] = useState("");
+  const [closingCase, setClosingCase] = useState(false);
+  const [closeCaseError, setCloseCaseError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<CaseItem | null>(null);
+  const [deletePinCells, setDeletePinCells] = useState<string[]>(() => emptyPinCells(4));
+  const [deletingCase, setDeletingCase] = useState(false);
+  const [deleteCaseError, setDeleteCaseError] = useState("");
+  const [reopenTarget, setReopenTarget] = useState<CaseItem | null>(null);
+  const [reopenStageIndex, setReopenStageIndex] = useState("0");
+  const [reopenPinCells, setReopenPinCells] = useState<string[]>(() => emptyPinCells(4));
+  const [reopeningCase, setReopeningCase] = useState(false);
+  const [reopenError, setReopenError] = useState("");
 
   const fetchCases = async () => {
     const params = new URLSearchParams();
@@ -204,7 +235,9 @@ export default function CasesPage() {
   const fetchClassifications = async () => {
     const res = await fetch("/api/case-classifications");
     const data = await res.json();
-    if (res.ok) setClassifications(data);
+    if (res.ok && Array.isArray(data)) {
+      setClassifications(sortCaseClassifications(data));
+    }
   };
 
   useEffect(() => {
@@ -239,6 +272,13 @@ export default function CasesPage() {
     setCaseJudicialCategory("");
     setCaseCivilProcedureType("");
     setClientId(clients[0]?.id || "");
+    setRegisterNewClient(clients.length === 0);
+    setNewClientName("");
+    setNewClientEmail("");
+    setNewClientPhone("");
+    setNewClientCompany("");
+    setNewClientAddress("");
+    setNewClientNotes("");
     setAssignedToId("");
     setClientType("");
     setContactEmail("");
@@ -247,6 +287,8 @@ export default function CasesPage() {
     setParticipantCount("");
     setCaseTsahTypes([]);
     setCaseParticipationStage("");
+    setMordonBaitsaaltynKharyaalal("");
+    setProkurorynKharyaalal("");
     setCaseClassificationId("");
     setClassificationOpen(false);
     setClassificationSearch("");
@@ -276,6 +318,8 @@ export default function CasesPage() {
     setParticipantCount(c.participantCount || "");
     setCaseTsahTypes(Array.isArray(c.caseTsahTypes) ? c.caseTsahTypes : []);
     setCaseParticipationStage(c.caseParticipationStage || "");
+    setMordonBaitsaaltynKharyaalal(c.mordonBaitsaaltynKharyaalal || "");
+    setProkurorynKharyaalal(c.prokurorynKharyaalal || "");
     setCaseClassificationId(c.caseClassificationId || "");
     setClassificationOpen(false);
     setClassificationSearch("");
@@ -299,67 +343,194 @@ export default function CasesPage() {
 
   const submit = async () => {
     setError("");
+    let effectiveClientId = clientId;
+
+    if (!editing) {
+      const needNewClient = registerNewClient || clients.length === 0;
+      if (needNewClient) {
+        if (!newClientName.trim()) {
+          setError("Үйлчлүүлэгчийн нэр оруулна уу.");
+          return;
+        }
+      } else if (!clientId) {
+        setError("Үйлчлүүлэгч сонгоно уу.");
+        return;
+      }
+    }
+
     setSubmitting(true);
-    const url = editing ? `/api/cases/${editing.id}` : "/api/cases";
-    const method = editing ? "PUT" : "POST";
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: title.trim(),
-        description: description.trim() || null,
-        status,
-        caseKind: caseKind === "judicial" || caseKind === "non_judicial" ? caseKind : null,
-        caseJudicialCategory:
-          (caseKind === "judicial" || caseKind === "non_judicial") && caseJudicialCategory ? caseJudicialCategory : null,
-        caseCivilProcedureType:
-          caseKind === "judicial" && caseJudicialCategory === "иргэний" && caseCivilProcedureType ? caseCivilProcedureType : null,
-        clientId,
-        assignedToId: assignedToId || null,
-        clientType: clientType || null,
-        contactEmail: contactEmail.trim() || null,
-        contactPhone: contactPhone.trim() || null,
-        subjectType: subjectType || null,
-        participantCount: participantCount || null,
-        caseTsahTypes: caseTsahTypes.length ? caseTsahTypes : null,
-        caseParticipationStage: caseParticipationStage || null,
-        caseClassificationId: caseClassificationId || null,
-        contractFiles: contractFiles.length ? contractFiles : null,
-        contractFee: contractFee.trim() ? parseFormattedNumber(contractFee) : null,
-        paymentSchedule:
-          paymentSchedule.length > 0
-            ? paymentSchedule
-                .map((p) => ({ date: p.date.trim(), amount: parseFormattedNumber(p.amount) }))
-                .filter((p) => p.date)
-            : null,
-        contractTerm: contractTerm.trim() || null,
-      }),
-    });
-    const data = await res.json();
-    setSubmitting(false);
-    if (!res.ok) {
-      setError(data.error || "Request failed");
+    try {
+      if (!editing && (registerNewClient || clients.length === 0)) {
+        const cr = await fetch("/api/clients", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: newClientName.trim(),
+            email: newClientEmail.trim() || null,
+            phone: newClientPhone.trim() || null,
+            company: newClientCompany.trim() || null,
+            address: newClientAddress.trim() || null,
+            notes: newClientNotes.trim() || null,
+          }),
+        });
+        const cd = await cr.json();
+        if (!cr.ok) {
+          setError(typeof cd.error === "string" ? cd.error : "Үйлчлүүлэгч бүртгэхэд алдаа");
+          return;
+        }
+        effectiveClientId = cd.id as string;
+      }
+
+      const url = editing ? `/api/cases/${editing.id}` : "/api/cases";
+      const method = editing ? "PUT" : "POST";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim() || null,
+          status,
+          caseKind: caseKind === "judicial" || caseKind === "non_judicial" ? caseKind : null,
+          caseJudicialCategory:
+            (caseKind === "judicial" || caseKind === "non_judicial") && caseJudicialCategory ? caseJudicialCategory : null,
+          caseCivilProcedureType:
+            caseKind === "judicial" && caseJudicialCategory === "иргэний" && caseCivilProcedureType ? caseCivilProcedureType : null,
+          clientId: effectiveClientId,
+          assignedToId: assignedToId || null,
+          clientType: clientType || null,
+          contactEmail: contactEmail.trim() || null,
+          contactPhone: contactPhone.trim() || null,
+          subjectType: subjectType || null,
+          participantCount: participantCount || null,
+          caseTsahTypes: caseTsahTypes.length ? caseTsahTypes : null,
+          caseParticipationStage: caseParticipationStage || null,
+          mordonBaitsaaltynKharyaalal: mordonBaitsaaltynKharyaalal.trim() || null,
+          prokurorynKharyaalal: prokurorynKharyaalal.trim() || null,
+          caseClassificationId: caseClassificationId || null,
+          contractFiles: contractFiles.length ? contractFiles : null,
+          contractFee: contractFee.trim() ? parseFormattedNumber(contractFee) : null,
+          paymentSchedule:
+            paymentSchedule.length > 0
+              ? paymentSchedule
+                  .map((p) => ({ date: p.date.trim(), amount: parseFormattedNumber(p.amount) }))
+                  .filter((p) => p.date)
+              : null,
+          contractTerm: contractTerm.trim() || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Request failed");
+        return;
+      }
+      closeModal();
+      fetchCases();
+      fetchClients();
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const openDeleteCase = (c: CaseItem) => {
+    setDeleteTarget(c);
+    setDeletePinCells(emptyPinCells(4));
+    setDeleteCaseError("");
+  };
+
+  const submitDeleteCase = async () => {
+    if (!deleteTarget) return;
+    setDeleteCaseError("");
+    setDeletingCase(true);
+    try {
+      const res = await fetch(`/api/cases/${deleteTarget.id}/delete-with-pin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: pinCellsToString(deletePinCells) }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setDeleteCaseError(typeof payload?.error === "string" ? payload.error : "Алдаа гарлаа");
+        return;
+      }
+      const t = deleteTarget.title;
+      setDeleteTarget(null);
+      fetchCases();
+      window.alert(`«${t}» хэрэг устгагдлаа.`);
+    } finally {
+      setDeletingCase(false);
+    }
+  };
+
+  const openReopenCase = (c: CaseItem) => {
+    if (c.status !== "CLOSED") return;
+    setReopenTarget(c);
+    setReopenStageIndex("0");
+    setReopenPinCells(emptyPinCells(4));
+    setReopenError("");
+  };
+
+  const submitReopen = async () => {
+    if (!reopenTarget) return;
+    const stageIndex = parseInt(reopenStageIndex, 10);
+    if (Number.isNaN(stageIndex) || stageIndex < 0 || stageIndex >= REOPEN_STAGE_OPTIONS.length) {
+      setReopenError("Үе шат сонгоно уу");
       return;
     }
-    closeModal();
-    fetchCases();
+    setReopenError("");
+    setReopeningCase(true);
+    try {
+      const res = await fetch(`/api/cases/${reopenTarget.id}/reopen`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pin: pinCellsToString(reopenPinCells),
+          caseProgressStepIndex: stageIndex,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setReopenError(typeof payload?.error === "string" ? payload.error : "Алдаа гарлаа");
+        return;
+      }
+      const t = reopenTarget.title;
+      setReopenTarget(null);
+      fetchCases();
+      window.alert(`«${t}» хэрэг сэргээгдлээ.`);
+    } finally {
+      setReopeningCase(false);
+    }
   };
 
-  const deleteCase = async (id: string) => {
-    if (!confirm("Энэ хэргийг устгах уу?")) return;
-    const res = await fetch(`/api/cases/${id}`, { method: "DELETE" });
-    if (res.ok) fetchCases();
-  };
-
-  const closeCase = async (c: CaseItem) => {
+  const openCloseCase = (c: CaseItem) => {
     if (c.status === "CLOSED") return;
-    if (!confirm(`"${c.title}" хэргийг хаах уу?`)) return;
-    const res = await fetch(`/api/cases/${c.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "CLOSED" }),
-    });
-    if (res.ok) fetchCases();
+    setCloseTarget(c);
+    setClosePinCells(emptyPinCells(4));
+    setCloseComment("");
+    setCloseCaseError("");
+  };
+
+  const submitCloseCase = async () => {
+    if (!closeTarget || closeTarget.status === "CLOSED") return;
+    setCloseCaseError("");
+    setClosingCase(true);
+    try {
+      const res = await fetch(`/api/cases/${closeTarget.id}/close`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: pinCellsToString(closePinCells), comment: closeComment }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setCloseCaseError(typeof payload?.error === "string" ? payload.error : "Алдаа гарлаа");
+        return;
+      }
+      const closedTitle = closeTarget.title;
+      setCloseTarget(null);
+      fetchCases();
+      window.alert(`«${closedTitle}» хэрэг амжилттай хаагдлаа.`);
+    } finally {
+      setClosingCase(false);
+    }
   };
 
   return (
@@ -444,9 +615,21 @@ export default function CasesPage() {
                         <Button
                           variant="link"
                           className="h-auto p-0 text-primary"
-                          onClick={() => closeCase(c)}
+                          onClick={() => openCloseCase(c)}
                         >
                           Хэрэг хаах
+                        </Button>
+                        <span className="mx-1 text-muted-foreground">·</span>
+                      </>
+                    )}
+                    {c.status === "CLOSED" && (
+                      <>
+                        <Button
+                          variant="link"
+                          className="h-auto p-0 text-primary"
+                          onClick={() => openReopenCase(c)}
+                        >
+                          Сэргээх
                         </Button>
                         <span className="mx-1 text-muted-foreground">·</span>
                       </>
@@ -454,7 +637,7 @@ export default function CasesPage() {
                     <Button
                       variant="link"
                       className="h-auto p-0 text-destructive hover:text-destructive"
-                      onClick={() => deleteCase(c.id)}
+                      onClick={() => openDeleteCase(c)}
                     >
                       Устгах
                     </Button>
@@ -465,6 +648,169 @@ export default function CasesPage() {
           </Table>
         </Card>
       )}
+
+      <Dialog
+        open={closeTarget !== null}
+        onOpenChange={(v) => {
+          if (!v) {
+            setCloseTarget(null);
+            setCloseCaseError("");
+            setClosePinCells(emptyPinCells(4));
+            setCloseComment("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Хэрэг хаах</DialogTitle>
+            <DialogDescription>
+              {closeTarget ? `«${closeTarget.title}» — PIN болон тайлбар оруулна уу.` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="space-y-3">
+              <Label>PIN код</Label>
+              <PinCodeInput
+                key={closeTarget?.id ?? "pin"}
+                value={closePinCells}
+                onChange={setClosePinCells}
+                length={4}
+                disabled={closingCase}
+                autoFocus={closeTarget !== null}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cases-close-comment">Хаах шалтгаан / тайлбар</Label>
+              <Textarea
+                id="cases-close-comment"
+                value={closeComment}
+                onChange={(e) => setCloseComment(e.target.value)}
+                rows={3}
+                placeholder="Заавал бөглөнө"
+              />
+            </div>
+            {closeCaseError && <p className="text-sm text-destructive">{closeCaseError}</p>}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setCloseTarget(null)}>
+              Болих
+            </Button>
+            <Button type="button" onClick={submitCloseCase} disabled={closingCase}>
+              {closingCase ? "Хааж байна…" : "Хаах"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(v) => {
+          if (!v) {
+            setDeleteTarget(null);
+            setDeleteCaseError("");
+            setDeletePinCells(emptyPinCells(4));
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Хэрэг устгах</DialogTitle>
+            <DialogDescription>
+              {deleteTarget ? `«${deleteTarget.title}» — бүрмэлсэнгүй устгана. PIN оруулна уу.` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="space-y-3">
+              <Label>PIN код</Label>
+              <PinCodeInput
+                key={deleteTarget?.id ?? "del-pin"}
+                value={deletePinCells}
+                onChange={setDeletePinCells}
+                length={4}
+                disabled={deletingCase}
+                autoFocus={deleteTarget !== null}
+              />
+            </div>
+            {deleteCaseError && <p className="text-sm text-destructive">{deleteCaseError}</p>}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>
+              Болих
+            </Button>
+            <Button type="button" variant="destructive" onClick={submitDeleteCase} disabled={deletingCase}>
+              {deletingCase ? "Устгаж байна…" : "Устгах"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={reopenTarget !== null}
+        onOpenChange={(v) => {
+          if (!v) {
+            setReopenTarget(null);
+            setReopenStageIndex("0");
+            setReopenError("");
+            setReopenPinCells(emptyPinCells(4));
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Хэрэг сэргээх</DialogTitle>
+            <DialogDescription>
+              {reopenTarget
+                ? `«${reopenTarget.title}» — PIN оруулж, хаалтаас нээх үе шатыг сонгоно уу.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="space-y-3">
+              <Label>PIN код</Label>
+              <PinCodeInput
+                key={reopenTarget?.id ?? "reopen-pin"}
+                value={reopenPinCells}
+                onChange={setReopenPinCells}
+                length={4}
+                disabled={reopeningCase}
+                autoFocus={reopenTarget !== null}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="reopen-stage">Сэргээх үе шат</Label>
+              <Select
+                value={reopenStageIndex}
+                onValueChange={(v) => v != null && setReopenStageIndex(v)}
+                disabled={reopeningCase}
+              >
+                <SelectTrigger id="reopen-stage" className="w-full">
+                  <SelectValue placeholder="Сонгох" />
+                </SelectTrigger>
+                <SelectContent>
+                  {REOPEN_STAGE_OPTIONS.map((opt, i) => (
+                    <SelectItem key={opt.value} value={String(i)}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {reopenError && <p className="text-sm text-destructive">{reopenError}</p>}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setReopenTarget(null)} disabled={reopeningCase}>
+              Болих
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void submitReopen()}
+              disabled={reopeningCase || pinCellsToString(reopenPinCells).length < 4}
+            >
+              {reopeningCase ? "Сэргээж байна…" : "Сэргээх"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={(v) => !v && closeModal()}>
         <DialogContent className="h-full min-h-screen overflow-y-auto sm:max-w-2xl">
@@ -609,26 +955,108 @@ export default function CasesPage() {
             )}
             {wizardStep === 2 && (
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Үйлчлүүлэгч *</Label>
-                <Select
-                  value={clientId}
-                  onValueChange={(v) => setClientId(v ?? "")}
-                >
-                  <SelectTrigger className="w-full">
-                    <span className="truncate">
-                      {clientId ? clients.find((c) => c.id === clientId)?.name ?? "Үйлчлүүлэгч сонгох" : "Үйлчлүүлэгч сонгох"}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {!editing && clients.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="case-wizard-register-client"
+                    checked={registerNewClient}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      setRegisterNewClient(on);
+                      if (on) setClientId("");
+                      else setClientId(clients[0]?.id || "");
+                    }}
+                    className="size-4 shrink-0 rounded border-input accent-primary"
+                  />
+                  <Label htmlFor="case-wizard-register-client" className="cursor-pointer font-normal">
+                    Шинээр бүртгэх
+                  </Label>
+                </div>
+              )}
+              {!editing && (registerNewClient || clients.length === 0) ? (
+                <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Шинэ үйлчлүүлэгчийг энд бүртгэнэ. Хэрэг үүсгэхтэй зэрэг хадгалагдана.
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="case-wizard-nc-name">Нэр *</Label>
+                    <Input
+                      id="case-wizard-nc-name"
+                      value={newClientName}
+                      onChange={(e) => setNewClientName(e.target.value)}
+                      placeholder="Овог нэр эсвэл байгууллагын нэр"
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="case-wizard-nc-email">Имэйл</Label>
+                      <Input
+                        id="case-wizard-nc-email"
+                        type="email"
+                        value={newClientEmail}
+                        onChange={(e) => setNewClientEmail(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="case-wizard-nc-phone">Утас</Label>
+                      <Input
+                        id="case-wizard-nc-phone"
+                        type="tel"
+                        value={newClientPhone}
+                        onChange={(e) => setNewClientPhone(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="case-wizard-nc-company">Байгууллага</Label>
+                    <Input
+                      id="case-wizard-nc-company"
+                      value={newClientCompany}
+                      onChange={(e) => setNewClientCompany(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="case-wizard-nc-address">Хаяг</Label>
+                    <Input
+                      id="case-wizard-nc-address"
+                      value={newClientAddress}
+                      onChange={(e) => setNewClientAddress(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="case-wizard-nc-notes">Тэмдэглэл</Label>
+                    <Input
+                      id="case-wizard-nc-notes"
+                      value={newClientNotes}
+                      onChange={(e) => setNewClientNotes(e.target.value)}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label>Үйлчлүүлэгч *</Label>
+                  <Select
+                    value={clientId}
+                    onValueChange={(v) => setClientId(v ?? "")}
+                  >
+                    <SelectTrigger className="w-full">
+                      <span className="truncate">
+                        {clientId
+                          ? clients.find((c) => c.id === clientId)?.name ?? "Үйлчлүүлэгч сонгох"
+                          : "Үйлчлүүлэгч сонгох"}
+                      </span>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Үйлчлүүлэгийн төрөл / Хүн, хуулийн этгээд</Label>
                 <Select
@@ -739,24 +1167,44 @@ export default function CasesPage() {
                   </div>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Оролцож эхэлсэн үе шат</Label>
-                <Select
-                  value={caseParticipationStage || "none"}
-                  onValueChange={(v) => setCaseParticipationStage(v === "none" || v == null ? "" : v)}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Сонгох" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">— Сонгоогүй —</SelectItem>
-                    {PARTICIPATION_STAGE_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="space-y-2 sm:col-span-2 lg:col-span-1">
+                  <Label>Оролцож эхэлсэн үе шат</Label>
+                  <Select
+                    value={caseParticipationStage || "none"}
+                    onValueChange={(v) => setCaseParticipationStage(v === "none" || v == null ? "" : v)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Сонгох" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— Сонгоогүй —</SelectItem>
+                      {PARTICIPATION_STAGE_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="case-mordon-kharyaalal">Мөрдөн байцаалтын харъяалал</Label>
+                  <Input
+                    id="case-mordon-kharyaalal"
+                    value={mordonBaitsaaltynKharyaalal}
+                    onChange={(e) => setMordonBaitsaaltynKharyaalal(e.target.value)}
+                    placeholder="Бичнэ үү"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="case-prokuror-kharyaalal">Прокурорын харъяалал</Label>
+                  <Input
+                    id="case-prokuror-kharyaalal"
+                    value={prokurorynKharyaalal}
+                    onChange={(e) => setProkurorynKharyaalal(e.target.value)}
+                    placeholder="Бичнэ үү"
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Хэргийн зүйлчлэл</Label>
@@ -1041,7 +1489,25 @@ export default function CasesPage() {
                   <Button type="button" variant="outline" onClick={() => setWizardStep(1)}>
                     Буцаах
                   </Button>
-                  <Button type="button" onClick={() => { setError(""); setWizardStep(3); }}>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (!editing) {
+                        const needNew = registerNewClient || clients.length === 0;
+                        if (needNew) {
+                          if (!newClientName.trim()) {
+                            setError("Үйлчлүүлэгчийн нэр оруулна уу.");
+                            return;
+                          }
+                        } else if (!clientId) {
+                          setError("Үйлчлүүлэгч сонгоно уу.");
+                          return;
+                        }
+                      }
+                      setError("");
+                      setWizardStep(3);
+                    }}
+                  >
                     Дараах
                   </Button>
                 </>

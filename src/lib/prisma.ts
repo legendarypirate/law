@@ -26,11 +26,14 @@ const hasTask =
   cached && "task" in cached && typeof (cached as { task?: unknown }).task === "object";
 const hasCaseClassification =
   cached && "caseClassification" in cached && typeof (cached as { caseClassification?: unknown }).caseClassification === "object";
+const hasAppSetting =
+  cached && "appSetting" in cached && typeof (cached as { appSetting?: unknown }).appSetting === "object";
 const useCache =
   process.env.NODE_ENV === "production" &&
   hasCaseType &&
   hasCaseStepParticipant &&
   hasTask &&
-  hasCaseClassification;
+  hasCaseClassification &&
+  hasAppSetting;
 export const prisma = useCache ? cached : createPrisma();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;

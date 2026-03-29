@@ -91,6 +91,51 @@ export function extractFilesFromCaseNoteJson(note: string | null): AuditAttachme
   }
 }
 
+/**
+ * Stable fingerprint for audit: ignores fully empty entries (default form row).
+ * So adding the default `[{ type: "", note: "", files: [] }]` does not differ from missing field.
+ */
+export function omgoologchAuditFingerprint(arr: unknown): string {
+  if (!Array.isArray(arr)) return "[]";
+  const normalized = arr
+    .map((e) => {
+      if (!e || typeof e !== "object") return null;
+      const type = typeof (e as { type?: unknown }).type === "string" ? (e as { type: string }).type.trim() : "";
+      const note = typeof (e as { note?: unknown }).note === "string" ? (e as { note: string }).note.trim() : "";
+      const files = Array.isArray((e as { files?: unknown }).files)
+        ? (e as { files: { url?: unknown }[] }).files
+        : [];
+      const urls = files
+        .map((f) => (f && typeof f === "object" && typeof (f as { url?: unknown }).url === "string" ? (f as { url: string }).url : ""))
+        .filter(Boolean)
+        .sort();
+      if (!type && !note && urls.length === 0) return null;
+      return { type, note, urls };
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null);
+  return JSON.stringify(normalized);
+}
+
+/** Files under `omgoologchHuseltGomdol[].files` (audit row attachments). */
+export function attachmentsFromOmgoologchArray(arr: unknown): AuditAttachment[] {
+  if (!Array.isArray(arr)) return [];
+  const out: AuditAttachment[] = [];
+  for (const entry of arr) {
+    if (!entry || typeof entry !== "object") continue;
+    const files = (entry as { files?: unknown }).files;
+    if (!Array.isArray(files)) continue;
+    for (const f of files) {
+      if (f && typeof f === "object") {
+        const url = typeof (f as { url?: unknown }).url === "string" ? (f as { url: string }).url : "";
+        const title =
+          typeof (f as { title?: unknown }).title === "string" ? (f as { title: string }).title : "Файл";
+        if (url) out.push({ title, url });
+      }
+    }
+  }
+  return out;
+}
+
 /** Files that appear in newNote but not in oldNote (by URL). */
 export function diffNoteFileAttachments(oldNote: string | null, newNote: string | null): AuditAttachment[] {
   const oldUrls = new Set(extractFilesFromCaseNoteJson(oldNote).map((f) => f.url));

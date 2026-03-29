@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { diffNoteFileAttachments } from "@/lib/auditAttachments";
+import {
+  attachmentsFromOmgoologchArray,
+  diffNoteFileAttachments,
+  omgoologchAuditFingerprint,
+} from "@/lib/auditAttachments";
 import {
   formatProsecutorSelectionMessage,
   parseLastProsecutorBlockFromNote,
@@ -9,6 +13,8 @@ import {
 import { STEP_PARTICIPANT_ROLE_KEYS } from "@/lib/stepParticipantRoles";
 import {
   formatCaseStepNoteForDisplay,
+  formatOmgoologchHuseltGomdolForAudit,
+  PROKUROR_HYANGAL_NOTE_KIND,
   SHUUKH_HARMGVIUL_NOTE_KIND,
   URIDCHILSAN_HELELTSUULEG_NOTE_KIND,
 } from "@/lib/caseNoteDisplay";
@@ -160,6 +166,41 @@ export async function PATCH(
                 },
               },
             });
+          }
+        } catch {
+          /* not JSON */
+        }
+      }
+
+      /** Үйл явцын түүх: Өмгөөлөгчөөс гаргасан хүсэлт гомдлууд (алхам 2/3/4-ийн JSON тэмдэглэл) */
+      if (prevNoteTrim !== nextNoteTrim) {
+        try {
+          const prevParsed = prevNoteTrim
+            ? (JSON.parse(prevNoteTrim) as Record<string, unknown>)
+            : ({} as Record<string, unknown>);
+          const nextParsed = nextNoteTrim
+            ? (JSON.parse(nextNoteTrim) as Record<string, unknown>)
+            : ({} as Record<string, unknown>);
+          if (nextParsed.kind !== PROKUROR_HYANGAL_NOTE_KIND) {
+            const prevOm = omgoologchAuditFingerprint(prevParsed.omgoologchHuseltGomdol);
+            const nextOm = omgoologchAuditFingerprint(nextParsed.omgoologchHuseltGomdol);
+            if (prevOm !== nextOm) {
+              const message = formatOmgoologchHuseltGomdolForAudit(nextParsed.omgoologchHuseltGomdol);
+              const attachments = attachmentsFromOmgoologchArray(nextParsed.omgoologchHuseltGomdol);
+              await prisma.auditLog.create({
+                data: {
+                  entityType: "case",
+                  entityId: caseId,
+                  action: "CASE_ATTORNEY_REQUEST_COMPLAINT_SAVED",
+                  message,
+                  data: {
+                    stepId,
+                    stageLabel: existing.stageLabel,
+                    ...(attachments.length > 0 ? { attachments } : {}),
+                  },
+                },
+              });
+            }
           }
         } catch {
           /* not JSON */

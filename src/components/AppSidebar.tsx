@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Briefcase, Users, UserCog, Shield, ScrollText, FolderTree, ListTodo, FileText } from "lucide-react";
+import { LayoutDashboard, Briefcase, Users, UserCog, Shield, ScrollText, FolderTree, ListTodo, FileText, Settings } from "lucide-react";
 
 const nav = [
   { href: "/", label: "Самбар", icon: LayoutDashboard },
   { href: "/cases", label: "Хэргүүд", icon: Briefcase },
+  { href: "/settings", label: "Тохиргоо", icon: Settings },
   { href: "/case-types", label: "Хэргийн төрөл", icon: FolderTree },
   { href: "/case-classifications", label: "Хэргийн зүйлчлэл", icon: FileText },
   { href: "/investigator-action-types", label: "Мөрдөгчийн ажиллагаа", icon: FileText },

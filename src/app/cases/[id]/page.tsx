@@ -22,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { emptyPinCells, PinCodeInput, pinCellsToString } from "@/components/PinCodeInput";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
@@ -37,6 +38,7 @@ import {
   ChevronUp,
   FileText,
   FolderOpen,
+  Pencil,
   Plus,
   StickyNote,
 } from "lucide-react";
@@ -89,7 +91,16 @@ import {
   isHynaltShuukhHuraldaanStructuredNote,
   parseHynaltShuukhHuraldaanNote,
 } from "@/lib/hynaltShuukhHuraldaanNote";
-import { PARTICIPATION_STAGE_VALUES } from "@/lib/caseStages";
+import { sortCaseClassifications } from "@/lib/caseClassifications";
+import {
+  PARTICIPATION_STAGE_OPTIONS,
+  PARTICIPATION_STAGE_VALUES,
+} from "@/lib/caseStages";
+import {
+  PARTICIPANT_COUNT_OPTIONS,
+  SUBJECT_TYPE_OPTIONS,
+  TSAH_TYPE_OPTIONS,
+} from "@/lib/caseFormFieldOptions";
 import { parseAuditAttachmentsFromData } from "@/lib/auditAttachments";
 import {
   formatCaseStepNoteForDisplay,
@@ -105,7 +116,7 @@ import {
   STEP_PARTICIPANT_ROLES,
   normalizeStepParticipantRole,
 } from "@/lib/stepParticipantRoles";
-import { cn, formatNumberWithCommas } from "@/lib/utils";
+import { cn, formatNumberWithCommas, parseFormattedNumber, sanitizeNumericInput } from "@/lib/utils";
 
 const PARTICIPANT_ROLES = STEP_PARTICIPANT_ROLES;
 
@@ -167,6 +178,10 @@ const CASE_HISTORY_ACTION_LABELS: Record<string, string> = {
   CASE_STEP_FILES_ADDED: "Алхамд файл хавсаргасан",
   CASE_PROSECUTOR_SELECTION_SAVED: "Прокурорын сонголт хадгалсан",
   CASE_STEP_SELECTION_SAVED: "Алхмын сонголт / тэмдэглэл хадгалсан",
+  CASE_MANUALLY_CLOSED: "Хэрэг гараар хаагдсан (PIN)",
+  CASE_ATTORNEY_REQUEST_COMPLAINT_SAVED: "Өмгөөлөгчийн хүсэлт / гомдол хадгалсан",
+  CASE_DELETED: "Хэрэг устгасан",
+  CASE_REOPENED: "Хаагдсан хэрэг сэргээгдсэн",
 };
 
 type CaseDetail = {
@@ -187,12 +202,16 @@ type CaseDetail = {
   participantCount: string | null;
   caseTsahTypes: string[] | null;
   caseParticipationStage: string | null;
+  mordonBaitsaaltynKharyaalal: string | null;
+  prokurorynKharyaalal: string | null;
   caseClassification: { id: string; name: string } | null;
   contractFiles: { url: string; title: string }[] | null;
   contractFee: number | null;
   paymentSchedule: { date: string; amount: number }[] | null;
   contractTerm: string | null;
   caseProgressStepIndex: number | null;
+  closeComment: string | null;
+  closedAt: string | null;
   createdAt: string;
   updatedAt: string;
   steps: CaseStep[];
@@ -657,7 +676,7 @@ function AnkhanShuukhShiidverBlock({
           const order = typeof x.order === "number" ? x.order : 0;
           if (id) rows.push({ id, name, order });
         }
-        setClassifications(rows);
+        setClassifications(sortCaseClassifications(rows));
       })
       .catch(() => {});
     return () => {
@@ -3422,9 +3441,17 @@ function isProsecutorEruuTatahDecision(decision: string): boolean {
   );
 }
 
+/** «Хэрэг бүртгэлтийн хэрэг нээхээс татгалзах» — дагах сонголт: зөвхөн «Үгүй» → 10-р алхам хаагдсан; «Хүлээгдэж буй» / «Гомдол гаргах» → 1-р алхам */
+const PROSECUTOR_DECISION_DECLINE_OPEN_CASE = "Хэрэг бүртгэлтийн хэрэг нээхээс татгалзах" as const;
+const PROSECUTOR_DECISION_DECLINE_OPEN_CASE_FOLLOW_UP_OPTIONS = [
+  "Хүлээгдэж буй",
+  "Үгүй",
+  "Гомдол гаргах",
+] as const;
+
 const PROSECUTOR_DECISION_OPTIONS = [
   "Хэрэг бүртгэлтийн хэрэг нээх",
-  "Хэрэг бүртгэлтийн хэрэг нээхээс татгалзах",
+  PROSECUTOR_DECISION_DECLINE_OPEN_CASE,
   "Харьяаллын дагуу шилжүүлэх",
   PROSECUTOR_DECISION_ERUU_TATAH,
 ] as const;
@@ -4139,7 +4166,10 @@ function GomdolMedeelelContent({
         }
       }
       const declineCloseCombo =
-        decision === "Хэрэг бүртгэлтийн хэрэг нээхээс татгалзах" && followUp === "Үгүй";
+        decision === PROSECUTOR_DECISION_DECLINE_OPEN_CASE && followUp === "Үгүй";
+      const declineStayStep1Combo =
+        decision === PROSECUTOR_DECISION_DECLINE_OPEN_CASE &&
+        (followUp === "Хүлээгдэж буй" || followUp === "Гомдол гаргах");
       if (declineCloseCombo) {
         const closeRes = await fetch(`/api/cases/${caseId}`, {
           method: "PUT",
@@ -4153,6 +4183,16 @@ function GomdolMedeelelContent({
         }
         reloadCase?.();
         onAfterProgressToStep?.(9);
+      } else if (declineStayStep1Combo) {
+        const stayRes = await fetch(`/api/cases/${caseId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ caseProgressStepIndex: 0, status: "IN_PROGRESS" }),
+        });
+        if (stayRes.ok) {
+          reloadCase?.();
+          onAfterProgressToStep?.(0);
+        }
       }
     } catch (err) {
       setSaveError("Хадгалахад алдаа гарлаа");
@@ -4520,7 +4560,10 @@ function GomdolMedeelelContent({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">— Сонгох —</SelectItem>
-                        {PROSECUTOR_DECISION_FOLLOW_UP_OPTIONS.map((opt) => (
+                        {(block.decision === PROSECUTOR_DECISION_DECLINE_OPEN_CASE
+                          ? PROSECUTOR_DECISION_DECLINE_OPEN_CASE_FOLLOW_UP_OPTIONS
+                          : PROSECUTOR_DECISION_FOLLOW_UP_OPTIONS
+                        ).map((opt) => (
                           <SelectItem key={opt} value={opt}>
                             {opt}
                           </SelectItem>
@@ -6152,6 +6195,10 @@ export default function CaseDetailPage() {
   const [caseTypes, setCaseTypes] = useState<{ id: string; name: string; categories: { id: string; name: string }[] }[]>([]);
   const [updatingCase, setUpdatingCase] = useState(false);
   const [closingCase, setClosingCase] = useState(false);
+  const [closeCaseDialogOpen, setCloseCaseDialogOpen] = useState(false);
+  const [closePinCells, setClosePinCells] = useState<string[]>(() => emptyPinCells(4));
+  const [closeComment, setCloseComment] = useState("");
+  const [closeCaseError, setCloseCaseError] = useState("");
   const [detailTab, setDetailTab] = useState<"detail" | "process" | "history">("detail");
   const [savingStepParticipants, setSavingStepParticipants] = useState<string | null>(null);
   const [caseHistoryLogs, setCaseHistoryLogs] = useState<CaseAuditLog[] | null>(null);
@@ -6160,6 +6207,65 @@ export default function CaseDetailPage() {
   const [historyFilesLog, setHistoryFilesLog] = useState<CaseAuditLog | null>(null);
   /** Audit row from which “View Note” was opened (drawer shows case + step notes) */
   const [historyNotesLog, setHistoryNotesLog] = useState<CaseAuditLog | null>(null);
+
+  const [detailUsers, setDetailUsers] = useState<User[]>([]);
+  const [detailClassifications, setDetailClassifications] = useState<{ id: string; name: string; order: number }[]>(
+    []
+  );
+  const [editingRegistration, setEditingRegistration] = useState(false);
+  const [savingRegistration, setSavingRegistration] = useState(false);
+  const [registrationSaveError, setRegistrationSaveError] = useState("");
+  const [regContactEmail, setRegContactEmail] = useState("");
+  const [regContactPhone, setRegContactPhone] = useState("");
+  const [regSubjectType, setRegSubjectType] = useState("");
+  const [regParticipantCount, setRegParticipantCount] = useState("");
+  const [regCaseTsahTypes, setRegCaseTsahTypes] = useState<string[]>([]);
+  const [regMordonKharyaalal, setRegMordonKharyaalal] = useState("");
+  const [regProkurorKharyaalal, setRegProkurorKharyaalal] = useState("");
+  const [regCaseClassificationId, setRegCaseClassificationId] = useState("");
+  const [regStatus, setRegStatus] = useState("");
+  const [regAssignedToId, setRegAssignedToId] = useState("");
+  const [regContractFiles, setRegContractFiles] = useState<{ url: string; title: string }[]>([]);
+  const [regClassificationOpen, setRegClassificationOpen] = useState(false);
+  const [regClassificationSearch, setRegClassificationSearch] = useState("");
+  const regClassificationRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!caseId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [uRes, cRes] = await Promise.all([
+          fetch("/api/users"),
+          fetch("/api/case-classifications"),
+        ]);
+        if (cancelled) return;
+        if (uRes.ok) {
+          const u = await uRes.json();
+          if (Array.isArray(u)) setDetailUsers(u);
+        }
+        if (cRes.ok) {
+          const c = await cRes.json();
+          if (Array.isArray(c)) setDetailClassifications(sortCaseClassifications(c));
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [caseId]);
+
+  useEffect(() => {
+    if (!regClassificationOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (regClassificationRef.current?.contains(e.target as Node)) return;
+      setRegClassificationOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [regClassificationOpen]);
 
   useLayoutEffect(() => {
     if (expandedStepIndex == null) {
@@ -6230,19 +6336,42 @@ export default function CaseDetailPage() {
     };
   }, [detailTab, caseId]);
 
-  const closeCase = async () => {
+  const openCloseCaseDialog = () => {
+    if (!data || data.status === "CLOSED") return;
+    setClosePinCells(emptyPinCells(4));
+    setCloseComment("");
+    setCloseCaseError("");
+    setCloseCaseDialogOpen(true);
+  };
+
+  const submitCloseCase = async () => {
     if (!caseId || !data || data.status === "CLOSED") return;
-    if (!confirm("Хэргийг хаах уу?")) return;
+    setCloseCaseError("");
     setClosingCase(true);
     try {
-      const res = await fetch(`/api/cases/${caseId}`, {
-        method: "PUT",
+      const res = await fetch(`/api/cases/${caseId}/close`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "CLOSED" }),
+        body: JSON.stringify({ pin: pinCellsToString(closePinCells), comment: closeComment }),
       });
-      if (res.ok) {
-        setData((prev) => (prev ? { ...prev, status: "CLOSED" } : null));
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setCloseCaseError(typeof payload?.error === "string" ? payload.error : "Алдаа гарлаа");
+        return;
       }
+      const closedTitle = data.title;
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: "CLOSED",
+              closeComment: typeof payload.closeComment === "string" ? payload.closeComment : closeComment.trim(),
+              closedAt: typeof payload.closedAt === "string" ? payload.closedAt : new Date().toISOString(),
+            }
+          : null
+      );
+      setCloseCaseDialogOpen(false);
+      window.alert(`«${closedTitle}» хэрэг амжилттай хаагдлаа.`);
     } finally {
       setClosingCase(false);
     }
@@ -6263,6 +6392,69 @@ export default function CaseDetailPage() {
       }
     } finally {
       setUpdatingCase(false);
+    }
+  };
+
+  const beginEditRegistration = () => {
+    if (!data) return;
+    setRegContactEmail(data.contactEmail ?? "");
+    setRegContactPhone(data.contactPhone ?? "");
+    setRegSubjectType(data.subjectType ?? "");
+    setRegParticipantCount(data.participantCount ?? "");
+    setRegCaseTsahTypes(Array.isArray(data.caseTsahTypes) ? [...data.caseTsahTypes] : []);
+    setRegMordonKharyaalal(data.mordonBaitsaaltynKharyaalal ?? "");
+    setRegProkurorKharyaalal(data.prokurorynKharyaalal ?? "");
+    setRegCaseClassificationId(data.caseClassification?.id ?? "");
+    setRegStatus(data.status ?? "OPEN");
+    setRegAssignedToId(data.assignedTo?.id ?? "");
+    setRegContractFiles(
+      Array.isArray(data.contractFiles) ? data.contractFiles.map((f) => ({ url: f.url, title: f.title })) : []
+    );
+    setRegistrationSaveError("");
+    setRegClassificationOpen(false);
+    setRegClassificationSearch("");
+    setEditingRegistration(true);
+  };
+
+  const cancelEditRegistration = () => {
+    setEditingRegistration(false);
+    setRegistrationSaveError("");
+    setRegClassificationOpen(false);
+  };
+
+  const saveRegistrationDetails = async () => {
+    if (!caseId || !data) return;
+    setSavingRegistration(true);
+    setRegistrationSaveError("");
+    try {
+      const res = await fetch(`/api/cases/${caseId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contactEmail: regContactEmail.trim() || null,
+          contactPhone: regContactPhone.trim() || null,
+          subjectType: regSubjectType.trim() || null,
+          participantCount: regParticipantCount.trim() || null,
+          caseTsahTypes: regCaseTsahTypes,
+          mordonBaitsaaltynKharyaalal: regMordonKharyaalal.trim() || null,
+          prokurorynKharyaalal: regProkurorKharyaalal.trim() || null,
+          caseClassificationId: regCaseClassificationId || null,
+          status: regStatus,
+          assignedToId: regAssignedToId || null,
+          contractFiles: regContractFiles,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setRegistrationSaveError(
+          typeof payload?.error === "string" ? payload.error : "Хадгалахад алдаа гарлаа"
+        );
+        return;
+      }
+      setEditingRegistration(false);
+      await load();
+    } finally {
+      setSavingRegistration(false);
     }
   };
 
@@ -6383,10 +6575,10 @@ export default function CaseDetailPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={closeCase}
+                  onClick={openCloseCaseDialog}
                   disabled={closingCase}
                 >
-                  {closingCase ? "Хааж байна…" : "Хэрэг хаах"}
+                  Хэрэг хаах
                 </Button>
               )}
               {latestStep && (
@@ -6442,82 +6634,521 @@ export default function CaseDetailPage() {
         <>
         {/* Хэргийн бүртгэлийн мэдээлэл — values from the 3-step create form */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold">
-              Хэргийн бүртгэлийн мэдээлэл
-            </CardTitle>
+          <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
+            <CardTitle className="text-sm font-semibold">Хэргийн бүртгэлийн мэдээлэл</CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              {registrationSaveError && (
+                <span className="text-xs text-destructive">{registrationSaveError}</span>
+              )}
+              {editingRegistration ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={cancelEditRegistration}
+                    disabled={savingRegistration}
+                  >
+                    Болих
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={saveRegistrationDetails}
+                    disabled={savingRegistration}
+                  >
+                    {savingRegistration ? "Хадгалж байна…" : "Хадгалах"}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 gap-1 px-2"
+                  onClick={beginEditRegistration}
+                >
+                  <Pencil className="h-4 w-4" aria-hidden />
+                  Засах
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
             <div>
               <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-sm">
-                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Гарчиг:</dt><dd className="font-medium">{data.title}</dd></div>
-                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Шүүхийн / Шүүхийн бус:</dt><dd className="font-medium">{data.caseKind === "judicial" ? "Шүүхийн" : data.caseKind === "non_judicial" ? "Шүүхийн бус" : "—"}</dd></div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline">
+                  <dt className="text-muted-foreground">Гарчиг:</dt>
+                  <dd className="font-medium">{data.title}</dd>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline">
+                  <dt className="text-muted-foreground">Шүүхийн / Шүүхийн бус:</dt>
+                  <dd className="font-medium">
+                    {data.caseKind === "judicial"
+                      ? "Шүүхийн"
+                      : data.caseKind === "non_judicial"
+                        ? "Шүүхийн бус"
+                        : "—"}
+                  </dd>
+                </div>
                 {data.caseKind === "judicial" && (
                   <>
-                    <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Ангилал:</dt><dd className="font-medium">{data.caseJudicialCategory ?? "—"}</dd></div>
+                    <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline">
+                      <dt className="text-muted-foreground">Ангилал:</dt>
+                      <dd className="font-medium">{data.caseJudicialCategory ?? "—"}</dd>
+                    </div>
                     {data.caseJudicialCategory === "иргэний" && (
-                      <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Иргэний төрөл:</dt><dd className="font-medium">{data.caseCivilProcedureType ?? "—"}</dd></div>
+                      <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline">
+                        <dt className="text-muted-foreground">Иргэний төрөл:</dt>
+                        <dd className="font-medium">{data.caseCivilProcedureType ?? "—"}</dd>
+                      </div>
                     )}
                   </>
                 )}
                 {data.caseKind === "non_judicial" && (
-                  <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Үйлчилгээний төрөл:</dt><dd className="font-medium">{data.caseJudicialCategory ?? "—"}</dd></div>
+                  <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline">
+                    <dt className="text-muted-foreground">Үйлчилгээний төрөл:</dt>
+                    <dd className="font-medium">{data.caseJudicialCategory ?? "—"}</dd>
+                  </div>
                 )}
-                {data.description && (
-                  <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Тайлбар:</dt><dd className="mt-0.5 font-medium">{data.description}</dd></div>
-                )}
-              </dl>
-            </div>
-
-            <div>
-              <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-sm">
-                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Үйлчлүүлэгч:</dt><dd className="font-medium">{data.client.name}</dd></div>
-                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Үйлчлүүлэгийн төрөл:</dt><dd className="font-medium">{data.clientType ?? "—"}</dd></div>
-                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Имэйл:</dt><dd className="font-medium">{data.contactEmail ?? "—"}</dd></div>
-                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Утас:</dt><dd className="font-medium">{data.contactPhone ?? "—"}</dd></div>
-                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Субъектийн төрөл:</dt><dd className="font-medium">{data.subjectType ?? "—"}</dd></div>
-                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Оролцогчийн тоо:</dt><dd className="font-medium">{data.participantCount ?? "—"}</dd></div>
-                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">ТСАХ-ний төрөл:</dt><dd className="font-medium">{Array.isArray(data.caseTsahTypes) && data.caseTsahTypes.length > 0 ? data.caseTsahTypes.join(", ") : "—"}</dd></div>
-                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Оролцож эхэлсэн үе шат:</dt><dd className="font-medium">{data.caseParticipationStage ?? "—"}</dd></div>
-                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Хэргийн зүйлчлэл:</dt><dd className="font-medium">{data.caseClassification?.name ?? "—"}</dd></div>
-                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Төлөв:</dt><dd><StatusBadge status={data.status} /></dd></div>
-                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Хариуцсан:</dt><dd className="font-medium">{data.assignedTo?.name ?? "—"}</dd></div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline">
+                  <dt className="text-muted-foreground">Тайлбар:</dt>
+                  <dd className="mt-0.5 font-medium whitespace-pre-wrap">{data.description ?? "—"}</dd>
+                </div>
               </dl>
             </div>
 
             <div>
               <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-sm">
                 <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline">
+                  <dt className="text-muted-foreground">Үйлчлүүлэгч:</dt>
+                  <dd className="font-medium">{data.client.name}</dd>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline">
+                  <dt className="text-muted-foreground">Үйлчлүүлэгийн төрөл:</dt>
+                  <dd className="font-medium">{data.clientType ?? "—"}</dd>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-center">
+                  <dt className="text-muted-foreground">Имэйл:</dt>
+                  <dd className="min-w-0">
+                    {editingRegistration ? (
+                      <Input
+                        type="email"
+                        value={regContactEmail}
+                        onChange={(e) => setRegContactEmail(e.target.value)}
+                        className="h-9 max-w-md"
+                        autoComplete="email"
+                      />
+                    ) : (
+                      <span className="font-medium">{data.contactEmail ?? "—"}</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-center">
+                  <dt className="text-muted-foreground">Утас:</dt>
+                  <dd className="min-w-0">
+                    {editingRegistration ? (
+                      <Input
+                        value={regContactPhone}
+                        onChange={(e) => setRegContactPhone(e.target.value)}
+                        className="h-9 max-w-md"
+                        autoComplete="tel"
+                      />
+                    ) : (
+                      <span className="font-medium">{data.contactPhone ?? "—"}</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-center">
+                  <dt className="text-muted-foreground">Субъектийн төрөл:</dt>
+                  <dd className="min-w-0">
+                    {editingRegistration ? (
+                      <Select
+                        value={regSubjectType || "none"}
+                        onValueChange={(v) => setRegSubjectType(v === "none" || v == null ? "" : v)}
+                      >
+                        <SelectTrigger className="h-9 max-w-md">
+                          <SelectValue placeholder="Сонгох" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">—</SelectItem>
+                          {SUBJECT_TYPE_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="font-medium">{data.subjectType ?? "—"}</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-center">
+                  <dt className="text-muted-foreground">Оролцогчийн тоо:</dt>
+                  <dd className="min-w-0">
+                    {editingRegistration ? (
+                      <Select
+                        value={regParticipantCount || "none"}
+                        onValueChange={(v) => setRegParticipantCount(v === "none" || v == null ? "" : v)}
+                      >
+                        <SelectTrigger className="h-9 max-w-md">
+                          <SelectValue placeholder="Сонгох" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">—</SelectItem>
+                          {PARTICIPANT_COUNT_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="font-medium">{data.participantCount ?? "—"}</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-start">
+                  <dt className="text-muted-foreground pt-2">ТСАХ-ний төрөл:</dt>
+                  <dd className="min-w-0">
+                    {editingRegistration ? (
+                      <div className="rounded-lg border border-input bg-transparent p-3">
+                        <div className="flex flex-col gap-2">
+                          {TSAH_TYPE_OPTIONS.map((o) => (
+                            <label
+                              key={o.value}
+                              className="flex cursor-pointer items-center gap-2 text-sm"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={regCaseTsahTypes.includes(o.value)}
+                                onChange={() => {
+                                  setRegCaseTsahTypes((prev) =>
+                                    prev.includes(o.value)
+                                      ? prev.filter((v) => v !== o.value)
+                                      : [...prev, o.value]
+                                  );
+                                }}
+                                className="size-4 rounded border-input"
+                              />
+                              <span>{o.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="font-medium">
+                        {Array.isArray(data.caseTsahTypes) && data.caseTsahTypes.length > 0
+                          ? data.caseTsahTypes.join(", ")
+                          : "—"}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline">
+                  <dt className="text-muted-foreground">Оролцож эхэлсэн үе шат:</dt>
+                  <dd className="font-medium">{data.caseParticipationStage ?? "—"}</dd>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-center">
+                  <dt className="text-muted-foreground">Мөрдөн байцаалтын харъяалал:</dt>
+                  <dd className="min-w-0">
+                    {editingRegistration ? (
+                      <Input
+                        value={regMordonKharyaalal}
+                        onChange={(e) => setRegMordonKharyaalal(e.target.value)}
+                        className="h-9 max-w-md"
+                      />
+                    ) : (
+                      <span className="font-medium">{data.mordonBaitsaaltynKharyaalal ?? "—"}</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-center">
+                  <dt className="text-muted-foreground">Прокурорын харъяалал:</dt>
+                  <dd className="min-w-0">
+                    {editingRegistration ? (
+                      <Input
+                        value={regProkurorKharyaalal}
+                        onChange={(e) => setRegProkurorKharyaalal(e.target.value)}
+                        className="h-9 max-w-md"
+                      />
+                    ) : (
+                      <span className="font-medium">{data.prokurorynKharyaalal ?? "—"}</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-start">
+                  <dt className="text-muted-foreground pt-2">Хэргийн зүйлчлэл:</dt>
+                  <dd className="min-w-0">
+                    {editingRegistration ? (
+                      <div className="relative max-w-md" ref={regClassificationRef}>
+                        <button
+                          type="button"
+                          className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 text-left text-sm"
+                          onClick={() => setRegClassificationOpen((o) => !o)}
+                        >
+                          <span className="truncate">
+                            {regCaseClassificationId
+                              ? (detailClassifications.find((c) => c.id === regCaseClassificationId)?.name ??
+                                "Сонгогдсон")
+                              : "Сонгох"}
+                          </span>
+                          <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
+                        </button>
+                        {regClassificationOpen && (
+                          <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover p-2 shadow-md">
+                            <Input
+                              placeholder="Хайх…"
+                              value={regClassificationSearch}
+                              onChange={(e) => setRegClassificationSearch(e.target.value)}
+                              className="mb-2 h-8 text-sm"
+                            />
+                            <div className="max-h-48 overflow-y-auto space-y-0.5">
+                              <button
+                                type="button"
+                                className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+                                onClick={() => {
+                                  setRegCaseClassificationId("");
+                                  setRegClassificationOpen(false);
+                                }}
+                              >
+                                —
+                              </button>
+                              {detailClassifications
+                                .filter((c) =>
+                                  !regClassificationSearch.trim()
+                                    ? true
+                                    : c.name
+                                        .toLowerCase()
+                                        .includes(regClassificationSearch.trim().toLowerCase())
+                                )
+                                .map((c) => (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted"
+                                    onClick={() => {
+                                      setRegCaseClassificationId(c.id);
+                                      setRegClassificationOpen(false);
+                                      setRegClassificationSearch("");
+                                    }}
+                                  >
+                                    {c.name}
+                                  </button>
+                                ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="font-medium">{data.caseClassification?.name ?? "—"}</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-center">
+                  <dt className="text-muted-foreground">Төлөв:</dt>
+                  <dd className="min-w-0">
+                    {editingRegistration ? (
+                      <Select
+                        value={regStatus}
+                        onValueChange={(v) => {
+                          if (v != null) setRegStatus(v);
+                        }}
+                      >
+                        <SelectTrigger className="h-9 max-w-md">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(STATUS_LABELS).map(([k, lbl]) => (
+                            <SelectItem key={k} value={k}>
+                              {lbl}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <StatusBadge status={data.status} />
+                    )}
+                  </dd>
+                </div>
+                {data.status === "CLOSED" && data.closeComment && (
+                  <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline">
+                    <dt className="text-muted-foreground">Хаасан тайлбар:</dt>
+                    <dd className="font-medium whitespace-pre-wrap">{data.closeComment}</dd>
+                  </div>
+                )}
+                {data.status === "CLOSED" && data.closedAt && (
+                  <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline">
+                    <dt className="text-muted-foreground">Хаагдсан огноо:</dt>
+                    <dd className="font-medium">
+                      {new Date(data.closedAt).toLocaleString("mn-MN", {
+                        year: "numeric",
+                        month: "short",
+                        day: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </dd>
+                  </div>
+                )}
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-center">
+                  <dt className="text-muted-foreground">Хариуцсан:</dt>
+                  <dd className="min-w-0">
+                    {editingRegistration ? (
+                      <Select
+                        value={regAssignedToId || "none"}
+                        onValueChange={(v) => setRegAssignedToId(v === "none" || v == null ? "" : v)}
+                      >
+                        <SelectTrigger className="h-9 max-w-md">
+                          <SelectValue placeholder="Сонгох" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">—</SelectItem>
+                          {detailUsers.map((u) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {u.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <span className="font-medium">{data.assignedTo?.name ?? "—"}</span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <div>
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 text-sm">
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-start">
                   <dt className="text-muted-foreground">Гэрээ (файлууд):</dt>
-                  <dd className="mt-1">
-                    {Array.isArray(data.contractFiles) && data.contractFiles.length > 0 ? (
+                  <dd className="mt-1 min-w-0">
+                    {editingRegistration ? (
+                      <div className="space-y-2 max-w-md">
+                        <div className="flex flex-wrap gap-2">
+                          <input
+                            id="detail-contract-files"
+                            type="file"
+                            multiple
+                            className="hidden"
+                            onChange={async (e) => {
+                              const list = e.target.files;
+                              if (!list?.length) return;
+                              const next: { url: string; title: string }[] = [];
+                              for (let i = 0; i < list.length; i++) {
+                                const file = list.item(i);
+                                if (!file) continue;
+                                const fd = new FormData();
+                                fd.append("file", file);
+                                const up = await fetch("/api/upload", { method: "POST", body: fd });
+                                if (up.ok) {
+                                  const j = await up.json();
+                                  next.push({ url: j.url, title: j.title ?? file.name });
+                                }
+                              }
+                              if (next.length) setRegContractFiles((prev) => [...prev, ...next]);
+                              e.target.value = "";
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-9"
+                            onClick={() => document.getElementById("detail-contract-files")?.click()}
+                          >
+                            Файл нэмэх
+                          </Button>
+                        </div>
+                        {regContractFiles.length > 0 ? (
+                          <ul className="space-y-1 text-sm">
+                            {regContractFiles.map((f, i) => (
+                              <li key={i} className="flex flex-wrap items-center gap-2">
+                                <a
+                                  href={f.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary underline truncate max-w-[200px]"
+                                >
+                                  {f.title || "Файл"}
+                                </a>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 text-destructive"
+                                  onClick={() =>
+                                    setRegContractFiles((prev) => prev.filter((_, j) => j !== i))
+                                  }
+                                >
+                                  Устгах
+                                </Button>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Файл байхгүй</span>
+                        )}
+                      </div>
+                    ) : Array.isArray(data.contractFiles) && data.contractFiles.length > 0 ? (
                       <ul className="space-y-1">
                         {data.contractFiles.map((f, i) => (
                           <li key={i}>
-                            <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-primary underline">{f.title || "Файл"}</a>
+                            <a
+                              href={f.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary underline"
+                            >
+                              {f.title || "Файл"}
+                            </a>
                           </li>
                         ))}
                       </ul>
-                    ) : "—"}
+                    ) : (
+                      "—"
+                    )}
                   </dd>
                 </div>
-                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Гэрээний хөлс:</dt><dd className="font-medium">{data.contractFee != null ? formatNumberWithCommas(data.contractFee) : "—"}</dd></div>
-                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline"><dt className="text-muted-foreground">Гэрээний хугацаа:</dt><dd className="font-medium">{data.contractTerm ?? "—"}</dd></div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline">
+                  <dt className="text-muted-foreground">Гэрээний хөлс:</dt>
+                  <dd className="font-medium">
+                    {data.contractFee != null ? formatNumberWithCommas(data.contractFee) : "—"}
+                  </dd>
+                </div>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 items-baseline">
+                  <dt className="text-muted-foreground">Гэрээний хугацаа:</dt>
+                  <dd className="font-medium">{data.contractTerm ?? "—"}</dd>
+                </div>
                 <div className="flex flex-col gap-1.5">
                   <dt className="text-muted-foreground">Төлбөрийн хуваарь:</dt>
                   <dd className="mt-0">
                     {Array.isArray(data.paymentSchedule) && data.paymentSchedule.length > 0 ? (
                       <div className="overflow-x-auto">
                         <table className="w-full min-w-[200px] text-xs">
-                          <thead><tr className="border-b"><th className="text-left py-1 pr-2 text-muted-foreground">Огноо</th><th className="text-right text-muted-foreground">Дүн</th></tr></thead>
+                          <thead>
+                            <tr className="border-b">
+                              <th className="text-left py-1 pr-2 text-muted-foreground">Огноо</th>
+                              <th className="text-right text-muted-foreground">Дүн</th>
+                            </tr>
+                          </thead>
                           <tbody>
                             {data.paymentSchedule.map((row, i) => (
-                              <tr key={i} className="border-b border-border/50"><td className="py-1 pr-2">{row.date}</td><td className="text-right font-medium">{formatNumberWithCommas(row.amount)}</td></tr>
+                              <tr key={i} className="border-b border-border/50">
+                                <td className="py-1 pr-2">{row.date}</td>
+                                <td className="text-right font-medium">
+                                  {formatNumberWithCommas(row.amount)}
+                                </td>
+                              </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
-                    ) : "—"}
+                    ) : (
+                      "—"
+                    )}
                   </dd>
                 </div>
               </dl>
@@ -6786,6 +7417,61 @@ export default function CaseDetailPage() {
             </CardContent>
           </Card>
         )}
+
+        <Dialog
+          open={closeCaseDialogOpen}
+          onOpenChange={(open) => {
+            setCloseCaseDialogOpen(open);
+            if (!open) {
+              setCloseCaseError("");
+              setClosePinCells(emptyPinCells(4));
+              setCloseComment("");
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Хэрэг хаах</DialogTitle>
+              <DialogDescription>
+                PIN код болон хаасан шалтгааны тайлбар оруулна уу. Тохиргооноос PIN өөрчлөх боломжтой.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-2">
+              <div className="space-y-3">
+                <Label>PIN код</Label>
+                <PinCodeInput
+                  key={closeCaseDialogOpen ? "open" : "closed"}
+                  value={closePinCells}
+                  onChange={setClosePinCells}
+                  length={4}
+                  disabled={closingCase}
+                  autoFocus={closeCaseDialogOpen}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="close-comment">Хаах шалтгаан / тайлбар</Label>
+                <Textarea
+                  id="close-comment"
+                  value={closeComment}
+                  onChange={(e) => setCloseComment(e.target.value)}
+                  rows={3}
+                  placeholder="Заавал бөглөнө"
+                />
+              </div>
+              {closeCaseError && (
+                <p className="text-sm text-destructive">{closeCaseError}</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCloseCaseDialogOpen(false)}>
+                Болих
+              </Button>
+              <Button type="button" onClick={submitCloseCase} disabled={closingCase}>
+                {closingCase ? "Хааж байна…" : "Хаах"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={historyNotesLog !== null} onOpenChange={(open) => !open && setHistoryNotesLog(null)}>
           <DialogContent className="max-w-md sm:max-w-xl h-dvh max-h-dvh min-h-0 overflow-hidden">

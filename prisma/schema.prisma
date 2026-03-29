@@ -70,6 +70,8 @@ model Case {
   participantCount         String?   // 1-5 | 6-10 | 11-с дээш
   caseTsahTypes            Json?     // ТСАХ-ний төрөл (array of strings, multiple selection)
   caseParticipationStage    String?   // Оролцож эхэлсэн үе шат
+  mordonBaitsaaltynKharyaalal String? // Мөрдөн байцаалтын харъяалал
+  prokurorynKharyaalal        String? // Прокурорын харъяалал
   caseClassificationId     String?
   caseClassification       CaseClassification? @relation(fields: [caseClassificationId], references: [id], onDelete: SetNull)
   contractFiles            Json?     // Гэрээ: [{ url, title }]
@@ -77,6 +79,8 @@ model Case {
   paymentSchedule          Json?     // Төлбөрийн хуваарь: [{ date, amount }]
   contractTerm             String?   // Гэрээний хугацаа e.g. 1 жил 2 сар
   caseProgressStepIndex    Int?      // 0-based; e.g. 2 = step 3 (Мөрдөн байцаалт); steps 0..index-1 shown completed
+  closeComment             String?   // Manual close via PIN (Хэрэг хаах)
+  closedAt                 DateTime? // Set when manually closed with PIN
   createdAt                DateTime  @default(now())
   updatedAt            DateTime          @updatedAt
 
@@ -211,4 +215,10 @@ model Task {
 
   @@index([status])
   @@index([assignedToId])
+}
+
+// Key-value settings (e.g. caseClosePinHash for manual case close PIN)
+model AppSetting {
+  key   String @id
+  value String
 }

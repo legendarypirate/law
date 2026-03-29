@@ -36,6 +36,10 @@ const ACTION_LABELS: Record<string, string> = {
   CASE_UPDATED: "Хэрэг шинэчилсэн",
   CASE_STEP_ADDED: "Алхам нэмсэн",
   CASE_STEP_SELECTION_SAVED: "Алхмын сонголт / тэмдэглэл хадгалсан",
+  CASE_MANUALLY_CLOSED: "Хэрэг гараар хаагдсан (PIN)",
+  CASE_ATTORNEY_REQUEST_COMPLAINT_SAVED: "Өмгөөлөгчийн хүсэлт / гомдол хадгалсан",
+  CASE_DELETED: "Хэрэг устгасан",
+  CASE_REOPENED: "Хаагдсан хэрэг сэргээгдсэн",
 };
 
 export default function AuditPage() {

@@ -44,7 +44,30 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { title, description, status, clientId, assignedToId, caseKind, caseJudicialCategory, caseCivilProcedureType, clientType, contactEmail, contactPhone, subjectType, participantCount, caseTsahTypes, caseParticipationStage, caseClassificationId, contractFiles, contractFee, paymentSchedule, contractTerm } = body;
+    const {
+      title,
+      description,
+      status,
+      clientId,
+      assignedToId,
+      caseKind,
+      caseJudicialCategory,
+      caseCivilProcedureType,
+      clientType,
+      contactEmail,
+      contactPhone,
+      subjectType,
+      participantCount,
+      caseTsahTypes,
+      caseParticipationStage,
+      mordonBaitsaaltynKharyaalal,
+      prokurorynKharyaalal,
+      caseClassificationId,
+      contractFiles,
+      contractFee,
+      paymentSchedule,
+      contractTerm,
+    } = body;
     if (!title?.trim()) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
@@ -83,6 +106,8 @@ export async function POST(request: Request) {
         caseTsahTypes:
           Array.isArray(caseTsahTypes) && caseTsahTypes.length > 0 ? caseTsahTypes : undefined,
         caseParticipationStage: caseParticipationStage?.trim() || null,
+        mordonBaitsaaltynKharyaalal: mordonBaitsaaltynKharyaalal?.trim() || null,
+        prokurorynKharyaalal: prokurorynKharyaalal?.trim() || null,
         caseClassificationId: caseClassificationId || null,
         contractFiles:
           Array.isArray(contractFiles) && contractFiles.length > 0 ? contractFiles : undefined,
